@@ -722,8 +722,10 @@ def create_oauth_flow(
     scopes: List[str], redirect_uri: str, state: Optional[str] = None
 ) -> Flow:
     """Creates an OAuth flow using environment variables or client secrets file."""
-    # Try environment variables first
+    # Try environment variables first - check for client secrets OR complete credentials
     env_config = load_client_secrets_from_env()
+    env_credentials = load_credentials_from_env()
+    
     if env_config:
         # Use client config directly
         flow = Flow.from_client_config(
@@ -731,12 +733,45 @@ def create_oauth_flow(
         )
         logger.debug("Created OAuth flow from environment variables")
         return flow
+    
+    if env_credentials:
+        # If we have complete credentials, create a minimal config for OAuth flow
+        # This allows the flow to work even if only complete credentials are provided
+        client_config = {
+            "web": {
+                "client_id": env_credentials.client_id,
+                "client_secret": env_credentials.client_secret,
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": env_credentials.token_uri or "https://oauth2.googleapis.com/token",
+                "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+            }
+        }
+        
+        flow = Flow.from_client_config(
+            client_config, scopes=scopes, redirect_uri=redirect_uri, state=state
+        )
+        logger.debug("Created OAuth flow from environment credentials")
+        return flow
 
     # Fall back to file-based config
     if not os.path.exists(CONFIG_CLIENT_SECRETS_PATH):
-        raise FileNotFoundError(
-            f"OAuth client secrets file not found at {CONFIG_CLIENT_SECRETS_PATH} and no environment variables set"
-        )
+        # Provide more helpful error message that includes environment variable options
+        error_msg = f"""OAuth client credentials not found. Please provide credentials using one of these methods:
+
+1. Environment variables for complete credentials:
+   - GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, GOOGLE_OAUTH_REFRESH_TOKEN
+
+2. Environment variables for client secrets only:
+   - GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET
+
+3. Client secrets file:
+   - Provide a client secrets file at {CONFIG_CLIENT_SECRETS_PATH}
+
+4. Environment variable path:
+   - Set GOOGLE_CLIENT_SECRET_PATH to point to your client secrets file"""
+   
+        logger.error(error_msg)
+        raise FileNotFoundError(error_msg)
 
     flow = Flow.from_client_secrets_file(
         CONFIG_CLIENT_SECRETS_PATH,
@@ -850,7 +885,7 @@ async def start_auth_flow(
         return "\n".join(message_lines)
 
     except FileNotFoundError as e:
-        error_text = f"OAuth client credentials not found: {e}. Please either:\n1. Set environment variables: GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET\n2. Ensure '{CONFIG_CLIENT_SECRETS_PATH}' file exists"
+        error_text = f"OAuth client credentials not found: {e}"
         logger.error(error_text, exc_info=True)
         raise Exception(error_text)
     except Exception as e:
@@ -977,7 +1012,24 @@ def get_credentials(
             logger.warning(
                 f"[get_credentials] Environment credentials lack required scopes. Need: {required_scopes}, Have: {env_credentials.scopes}. User: '{user_google_email}', Session: '{session_id}'"
             )
-            # Don't return None here, let it fall through to other methods
+            # Try to refresh credentials first to see if they're valid
+            refreshed_credentials = _refresh_credentials_if_needed(
+                credentials=env_credentials,
+                user_google_email=user_google_email,
+                session_id=session_id,
+                credentials_base_dir=credentials_base_dir
+            )
+            
+            if refreshed_credentials and refreshed_credentials.valid:
+                logger.info(
+                    f"[get_credentials] Environment credentials are valid but lack required scopes. Will need re-authentication. User: '{user_google_email}', Session: '{session_id}'"
+                )
+                # Fall through to other methods - OAuth flow will use the env credentials for client config
+            else:
+                logger.warning(
+                    f"[get_credentials] Environment credentials are invalid and lack required scopes. User: '{user_google_email}', Session: '{session_id}'"
+                )
+                # Fall through to other methods
         else:
             # Use proactive refresh logic for environment credentials
             refreshed_credentials = _refresh_credentials_if_needed(
@@ -996,6 +1048,7 @@ def get_credentials(
                 logger.warning(
                     f"[get_credentials] Environment credentials failed validation/refresh. User: '{user_google_email}', Session: '{session_id}'"
                 )
+                # Fall through to other methods
 
     # Check for single-user mode
     if os.getenv("MCP_SINGLE_USER_MODE") == "1":
