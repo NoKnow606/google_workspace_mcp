@@ -10,11 +10,15 @@ startCommand:
     required:
       - googleOauthClientId
       - googleOauthClientSecret
+      - googleOauthRefreshToken
     properties:
       googleOauthClientId:
         type: string
         description: "(required) - Your Google OAuth 2.0 Client ID from Google Cloud Console"
       googleOauthClientSecret:
+        type: string
+        description: "(required) - Your Google OAuth 2.0 Client Secret from Google Cloud Console"
+      googleOauthRefreshToken:
         type: string
         description: "(required) - Your Google OAuth 2.0 Client Secret from Google Cloud Console"
       googleOauthRedirectUri:
@@ -40,6 +44,7 @@ startCommand:
       env: {
         GOOGLE_OAUTH_CLIENT_ID: config.googleOauthClientId,
         GOOGLE_OAUTH_CLIENT_SECRET: config.googleOauthClientSecret,
+        GOOGLE_OAUTH_REFRESH_TOKEN: config.googleOauthRefreshToken,
         ...(config.googleOauthRedirectUri && { GOOGLE_OAUTH_REDIRECT_URI: config.googleOauthRedirectUri }),
         ...(config.googleClientSecretPath && { GOOGLE_CLIENT_SECRET_PATH: config.googleClientSecretPath }),
         ...(config.workspaceMcpBaseUri && { WORKSPACE_MCP_BASE_URI: config.workspaceMcpBaseUri }),
