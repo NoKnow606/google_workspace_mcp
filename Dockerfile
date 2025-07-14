@@ -30,7 +30,7 @@ RUN uv pip install --system --no-cache \
 COPY . .
 
 # Create placeholder client_secrets.json for lazy loading capability
-RUN echo '{"installed":{"client_id":"placeholder","client_secret":"placeholder","auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://oauth2.googleapis.com/token","redirect_uris":["http://localhost:8000/oauth2callback"]}}' > /app/client_secrets.json
+#RUN echo '{"installed":{"client_id":"placeholder","client_secret":"placeholder","auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://oauth2.googleapis.com/token","redirect_uris":["http://localhost:8000/oauth2callback"]}}' > /app/client_secrets.json
 
 # Debug: Check PORT environment variable first
 RUN echo "=== Debug: Environment Variables ===" && \
