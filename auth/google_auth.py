@@ -5,8 +5,9 @@ import json
 import jwt
 import logging
 import os
+import time
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional, Tuple, Dict, Any
 
 from google.oauth2.credentials import Credentials
@@ -56,6 +57,222 @@ else:
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
         "client_secret.json",
     )
+
+# --- Helper Functions ---
+
+
+def _is_token_expiring_soon(credentials: Credentials, minutes_threshold: int = 5) -> bool:
+    """
+    Check if credentials will expire within the specified threshold.
+    
+    Args:
+        credentials: The credentials object to check
+        minutes_threshold: How many minutes before expiry to consider "expiring soon"
+    
+    Returns:
+        True if token will expire within the threshold, False otherwise
+    """
+    if not credentials.expiry:
+        return False
+    
+    expiry_threshold = datetime.utcnow() + timedelta(minutes=minutes_threshold)
+    return credentials.expiry <= expiry_threshold
+
+
+def _refresh_credentials_if_needed(
+    credentials: Credentials,
+    user_google_email: Optional[str],
+    session_id: Optional[str],
+    credentials_base_dir: str = DEFAULT_CREDENTIALS_DIR,
+    force_refresh: bool = False,
+    retry_count: int = 1
+) -> Optional[Credentials]:
+    """
+    Refresh credentials if they're expired or expiring soon.
+    
+    Args:
+        credentials: The credentials to potentially refresh
+        user_google_email: User's Google email for saving refreshed credentials
+        session_id: Session ID for caching refreshed credentials
+        credentials_base_dir: Base directory for credential files
+        force_refresh: Force refresh even if not expired
+        retry_count: Number of retry attempts for transient errors
+    
+    Returns:
+        Refreshed credentials or None if refresh failed
+    """
+    if not credentials.refresh_token:
+        logger.warning(
+            f"[_refresh_credentials_if_needed] No refresh token available. User: '{user_google_email}', Session: '{session_id}'"
+        )
+        return None
+    
+    needs_refresh = (
+        force_refresh or
+        credentials.expired or
+        _is_token_expiring_soon(credentials)
+    )
+    
+    if not needs_refresh:
+        return credentials
+    
+    for attempt in range(retry_count):
+        try:
+            if credentials.expired:
+                logger.info(
+                    f"[_refresh_credentials_if_needed] Credentials expired. Refreshing (attempt {attempt + 1}/{retry_count}). User: '{user_google_email}', Session: '{session_id}'"
+                )
+            else:
+                logger.info(
+                    f"[_refresh_credentials_if_needed] Credentials expiring soon. Proactively refreshing (attempt {attempt + 1}/{retry_count}). User: '{user_google_email}', Session: '{session_id}'"
+                )
+            
+            credentials.refresh(Request())
+            
+            logger.info(
+                f"[_refresh_credentials_if_needed] Credentials refreshed successfully. User: '{user_google_email}', Session: '{session_id}'"
+            )
+            
+            # Save refreshed credentials
+            if user_google_email:
+                save_credentials_to_file(
+                    user_google_email, credentials, credentials_base_dir
+                )
+            if session_id:
+                save_credentials_to_session(session_id, credentials)
+            
+            return credentials
+        
+        except RefreshError as e:
+            logger.warning(
+                f"[_refresh_credentials_if_needed] RefreshError - token expired/revoked: {e}. User: '{user_google_email}', Session: '{session_id}'. Re-authentication required."
+            )
+            return None  # Don't retry RefreshError - indicates token is revoked
+        
+        except Exception as e:
+            if attempt < retry_count - 1:
+                logger.warning(
+                    f"[_refresh_credentials_if_needed] Transient error refreshing credentials (attempt {attempt + 1}/{retry_count}): {e}. User: '{user_google_email}', Session: '{session_id}'. Retrying..."
+                )
+                # Brief backoff before retry
+                time.sleep(1)
+                continue
+            else:
+                logger.error(
+                    f"[_refresh_credentials_if_needed] Failed to refresh credentials after {retry_count} attempts: {e}. User: '{user_google_email}', Session: '{session_id}'",
+                    exc_info=True,
+                )
+                return None
+    
+    return None
+
+
+def validate_and_refresh_credentials(
+    credentials: Credentials,
+    user_google_email: Optional[str] = None,
+    session_id: Optional[str] = None,
+    credentials_base_dir: str = DEFAULT_CREDENTIALS_DIR
+) -> bool:
+    """
+    Validate credentials and refresh if needed before performing operations.
+    
+    This function should be called before important API operations to ensure
+    credentials are valid and won't fail due to expiration.
+    
+    Args:
+        credentials: The credentials to validate
+        user_google_email: User's Google email for saving refreshed credentials
+        session_id: Session ID for caching refreshed credentials
+        credentials_base_dir: Base directory for credential files
+    
+    Returns:
+        True if credentials are valid (possibly after refresh), False otherwise
+    """
+    if not credentials:
+        logger.warning("[validate_and_refresh_credentials] No credentials provided")
+        return False
+    
+    if not credentials.refresh_token:
+        logger.warning(
+            f"[validate_and_refresh_credentials] No refresh token available. User: '{user_google_email}', Session: '{session_id}'"
+        )
+        return credentials.valid
+    
+    # Check if credentials are valid or can be refreshed
+    if credentials.valid and not _is_token_expiring_soon(credentials):
+        logger.debug(
+            f"[validate_and_refresh_credentials] Credentials are valid and not expiring soon. User: '{user_google_email}', Session: '{session_id}'"
+        )
+        return True
+    
+    # Attempt to refresh credentials
+    refreshed_credentials = _refresh_credentials_if_needed(
+        credentials=credentials,
+        user_google_email=user_google_email,
+        session_id=session_id,
+        credentials_base_dir=credentials_base_dir,
+        retry_count=2  # Allow more retries for explicit validation
+    )
+    
+    if refreshed_credentials and refreshed_credentials.valid:
+        logger.debug(
+            f"[validate_and_refresh_credentials] Credentials successfully refreshed. User: '{user_google_email}', Session: '{session_id}'"
+        )
+        return True
+    
+    logger.warning(
+        f"[validate_and_refresh_credentials] Failed to validate/refresh credentials. User: '{user_google_email}', Session: '{session_id}'"
+    )
+    return False
+
+
+def get_credentials_status(credentials: Credentials) -> Dict[str, Any]:
+    """
+    Get detailed status information about credentials.
+    
+    Args:
+        credentials: The credentials to check
+    
+    Returns:
+        Dictionary with credential status information
+    """
+    if not credentials:
+        return {
+            "valid": False,
+            "expired": True,
+            "has_refresh_token": False,
+            "expiry": None,
+            "expires_in_minutes": None,
+            "expiring_soon": False,
+            "status": "no_credentials"
+        }
+    
+    expires_in_minutes = None
+    expiring_soon = False
+    
+    if credentials.expiry:
+        time_until_expiry = credentials.expiry - datetime.utcnow()
+        expires_in_minutes = time_until_expiry.total_seconds() / 60
+        expiring_soon = _is_token_expiring_soon(credentials)
+    
+    status = "valid"
+    if credentials.expired:
+        status = "expired"
+    elif expiring_soon:
+        status = "expiring_soon"
+    elif not credentials.valid:
+        status = "invalid"
+    
+    return {
+        "valid": credentials.valid,
+        "expired": credentials.expired,
+        "has_refresh_token": credentials.refresh_token is not None,
+        "expiry": credentials.expiry.isoformat() if credentials.expiry else None,
+        "expires_in_minutes": expires_in_minutes,
+        "expiring_soon": expiring_soon,
+        "status": status
+    }
+
 
 # --- Helper Functions ---
 
@@ -203,6 +420,64 @@ def load_credentials_from_session(session_id: str) -> Optional[Credentials]:
     return credentials
 
 
+def load_credentials_from_env() -> Optional[Credentials]:
+    """
+    Load credentials directly from environment variables.
+    
+    Environment variables used:
+        - GOOGLE_OAUTH_CLIENT_ID: OAuth 2.0 client ID
+        - GOOGLE_OAUTH_CLIENT_SECRET: OAuth 2.0 client secret
+        - GOOGLE_OAUTH_REFRESH_TOKEN: OAuth 2.0 refresh token
+        - GOOGLE_OAUTH_ACCESS_TOKEN: (optional) OAuth 2.0 access token
+        - GOOGLE_OAUTH_TOKEN_URI: (optional) OAuth 2.0 token URI
+        - GOOGLE_OAUTH_SCOPES: (optional) Comma-separated list of scopes
+    
+    Returns:
+        Credentials object created from environment variables, or None if required variables are missing
+    """
+    client_id = os.getenv("GOOGLE_OAUTH_CLIENT_ID")
+    client_secret = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET") 
+    refresh_token = os.getenv("GOOGLE_OAUTH_REFRESH_TOKEN")
+    access_token = os.getenv("GOOGLE_OAUTH_ACCESS_TOKEN")
+    token_uri = os.getenv("GOOGLE_OAUTH_TOKEN_URI", "https://oauth2.googleapis.com/token")
+    scopes_str = os.getenv("GOOGLE_OAUTH_SCOPES")
+    
+    # Check required environment variables
+    if not client_id or not client_secret or not refresh_token:
+        missing_vars = []
+        if not client_id:
+            missing_vars.append("GOOGLE_OAUTH_CLIENT_ID")
+        if not client_secret:
+            missing_vars.append("GOOGLE_OAUTH_CLIENT_SECRET")
+        if not refresh_token:
+            missing_vars.append("GOOGLE_OAUTH_REFRESH_TOKEN")
+        
+        logger.debug(f"Missing required environment variables for credentials: {missing_vars}")
+        return None
+    
+    # Parse scopes if provided
+    scopes = None
+    if scopes_str:
+        scopes = [scope.strip() for scope in scopes_str.split(",") if scope.strip()]
+    
+    try:
+        credentials = Credentials(
+            token=access_token,  # May be None, will be refreshed if needed
+            refresh_token=refresh_token,
+            token_uri=token_uri,
+            client_id=client_id,
+            client_secret=client_secret,
+            scopes=scopes
+        )
+        
+        logger.info("Successfully loaded credentials from environment variables")
+        return credentials
+        
+    except Exception as e:
+        logger.error(f"Error creating credentials from environment variables: {e}")
+        return None
+
+
 def load_client_secrets_from_env() -> Optional[Dict[str, Any]]:
     """
     Loads the client secrets from environment variables.
@@ -211,6 +486,7 @@ def load_client_secrets_from_env() -> Optional[Dict[str, Any]]:
         - GOOGLE_OAUTH_CLIENT_ID: OAuth 2.0 client ID
         - GOOGLE_OAUTH_CLIENT_SECRET: OAuth 2.0 client secret
         - GOOGLE_OAUTH_REDIRECT_URI: (optional) OAuth redirect URI
+        - GOOGLE_OAUTH_REFRESH_TOKEN: (optional) OAuth 2.0 refresh token
 
     Returns:
         Client secrets configuration dict compatible with Google OAuth library,
@@ -219,6 +495,7 @@ def load_client_secrets_from_env() -> Optional[Dict[str, Any]]:
     client_id = os.getenv("GOOGLE_OAUTH_CLIENT_ID")
     client_secret = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET")
     redirect_uri = os.getenv("GOOGLE_OAUTH_REDIRECT_URI")
+    refresh_token = os.getenv("GOOGLE_OAUTH_REFRESH_TOKEN")
 
     if client_id and client_secret:
         # Create config structure that matches Google client secrets format
@@ -233,6 +510,10 @@ def load_client_secrets_from_env() -> Optional[Dict[str, Any]]:
         # Add redirect_uri if provided via environment variable
         if redirect_uri:
             web_config["redirect_uris"] = [redirect_uri]
+
+        # Add refresh_token if provided via environment variable
+        if refresh_token:
+            web_config["refresh_token"] = refresh_token
 
         # Return the full config structure expected by Google OAuth library
         config = {"web": web_config}
@@ -302,12 +583,139 @@ def check_client_secrets() -> Optional[str]:
         An error message string if secrets are not found, otherwise None.
     """
     env_config = load_client_secrets_from_env()
-    if not env_config and not os.path.exists(CONFIG_CLIENT_SECRETS_PATH):
-        logger.error(
-            f"OAuth client credentials not found. No environment variables set and no file at {CONFIG_CLIENT_SECRETS_PATH}"
-        )
-        return f"OAuth client credentials not found. Please set GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET environment variables or provide a client secrets file at {CONFIG_CLIENT_SECRETS_PATH}."
-    return None
+    env_credentials = load_credentials_from_env()
+    
+    # Check if we have complete credentials from environment
+    if env_credentials:
+        # Validate environment credentials
+        is_valid, errors = validate_environment_credentials()
+        if not is_valid:
+            error_msg = f"Invalid environment credentials: {'; '.join(errors)}"
+            logger.error(error_msg)
+            return error_msg
+        
+        logger.info("Found complete OAuth credentials in environment variables")
+        return None
+    
+    # Check if we have client secrets from environment
+    if env_config:
+        logger.info("Found OAuth client secrets in environment variables")
+        return None
+    
+    # Check if we have client secrets file
+    if os.path.exists(CONFIG_CLIENT_SECRETS_PATH):
+        logger.info(f"Found OAuth client secrets file at {CONFIG_CLIENT_SECRETS_PATH}")
+        return None
+    
+    # No credentials found anywhere
+    logger.error("OAuth client credentials not found in any location")
+    return f"""OAuth client credentials not found. Please provide credentials using one of these methods:
+
+1. Environment variables (recommended):
+   - For complete credentials: GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, GOOGLE_OAUTH_REFRESH_TOKEN
+   - For client secrets only: GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET
+
+2. Client secrets file:
+   - Provide a client secrets file at {CONFIG_CLIENT_SECRETS_PATH}
+
+3. Environment variable path:
+   - Set GOOGLE_CLIENT_SECRET_PATH to point to your client secrets file"""
+
+
+def validate_environment_credentials() -> Tuple[bool, List[str]]:
+    """
+    Validate environment credentials and return validation results.
+    
+    Returns:
+        Tuple of (is_valid, list_of_errors)
+    """
+    errors = []
+    
+    client_id = os.getenv("GOOGLE_OAUTH_CLIENT_ID")
+    client_secret = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET")
+    refresh_token = os.getenv("GOOGLE_OAUTH_REFRESH_TOKEN")
+    access_token = os.getenv("GOOGLE_OAUTH_ACCESS_TOKEN")
+    token_uri = os.getenv("GOOGLE_OAUTH_TOKEN_URI")
+    scopes_str = os.getenv("GOOGLE_OAUTH_SCOPES")
+    
+    # Check required variables
+    if not client_id:
+        errors.append("GOOGLE_OAUTH_CLIENT_ID is required")
+    elif not client_id.strip():
+        errors.append("GOOGLE_OAUTH_CLIENT_ID cannot be empty")
+    
+    if not client_secret:
+        errors.append("GOOGLE_OAUTH_CLIENT_SECRET is required")
+    elif not client_secret.strip():
+        errors.append("GOOGLE_OAUTH_CLIENT_SECRET cannot be empty")
+    
+    if not refresh_token:
+        errors.append("GOOGLE_OAUTH_REFRESH_TOKEN is required")
+    elif not refresh_token.strip():
+        errors.append("GOOGLE_OAUTH_REFRESH_TOKEN cannot be empty")
+    
+    # Validate optional variables
+    if token_uri and not token_uri.startswith("https://"):
+        errors.append("GOOGLE_OAUTH_TOKEN_URI must be a valid HTTPS URL")
+    
+    if scopes_str:
+        scopes = [scope.strip() for scope in scopes_str.split(",")]
+        if not scopes or any(not scope for scope in scopes):
+            errors.append("GOOGLE_OAUTH_SCOPES must be a comma-separated list of non-empty scopes")
+    
+    # Validate access token format if provided
+    if access_token and not access_token.strip():
+        errors.append("GOOGLE_OAUTH_ACCESS_TOKEN cannot be empty if provided")
+    
+    return len(errors) == 0, errors
+
+
+def check_client_secrets() -> Optional[str]:
+    """
+    Checks for the presence of OAuth client secrets, either as environment
+    variables or as a file.
+
+    Returns:
+        An error message string if secrets are not found, otherwise None.
+    """
+    env_config = load_client_secrets_from_env()
+    env_credentials = load_credentials_from_env()
+    
+    # Check if we have complete credentials from environment
+    if env_credentials:
+        # Validate environment credentials
+        is_valid, errors = validate_environment_credentials()
+        if not is_valid:
+            error_msg = f"Invalid environment credentials: {'; '.join(errors)}"
+            logger.error(error_msg)
+            return error_msg
+        
+        logger.info("Found complete OAuth credentials in environment variables")
+        return None
+    
+    # Check if we have client secrets from environment
+    if env_config:
+        logger.info("Found OAuth client secrets in environment variables")
+        return None
+    
+    # Check if we have client secrets file
+    if os.path.exists(CONFIG_CLIENT_SECRETS_PATH):
+        logger.info(f"Found OAuth client secrets file at {CONFIG_CLIENT_SECRETS_PATH}")
+        return None
+    
+    # No credentials found anywhere
+    logger.error("OAuth client credentials not found in any location")
+    return f"""OAuth client credentials not found. Please provide credentials using one of these methods:
+
+1. Environment variables (recommended):
+   - For complete credentials: GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, GOOGLE_OAUTH_REFRESH_TOKEN
+   - For client secrets only: GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET
+
+2. Client secrets file:
+   - Provide a client secrets file at {CONFIG_CLIENT_SECRETS_PATH}
+
+3. Environment variable path:
+   - Set GOOGLE_CLIENT_SECRET_PATH to point to your client secrets file"""
 
 
 def create_oauth_flow(
@@ -533,25 +941,62 @@ def handle_auth_callback(
 def get_credentials(
     user_google_email: Optional[str],  # Can be None if relying on session_id
     required_scopes: List[str],
-    client_secrets_path: Optional[str] = None,
     credentials_base_dir: str = DEFAULT_CREDENTIALS_DIR,
     session_id: Optional[str] = None,
 ) -> Optional[Credentials]:
     """
-    Retrieves stored credentials, prioritizing session, then file. Refreshes if necessary.
-    If credentials are loaded from file and a session_id is present, they are cached in the session.
-    In single-user mode, bypasses session mapping and uses any available credentials.
+    Retrieves stored credentials, prioritizing environment variables, then session, then file. 
+    Refreshes if necessary. If credentials are loaded from file and a session_id is present, 
+    they are cached in the session. In single-user mode, bypasses session mapping and uses 
+    any available credentials.
+
+    Priority order:
+    1. Environment variables (GOOGLE_OAUTH_REFRESH_TOKEN, etc.)
+    2. Session cache
+    3. File storage
+    4. Single-user mode fallback
 
     Args:
         user_google_email: Optional user's Google email.
         required_scopes: List of scopes the credentials must have.
-        client_secrets_path: Path to client secrets, required for refresh if not in creds.
         credentials_base_dir: Base directory for credential files.
         session_id: Optional MCP session ID.
 
     Returns:
         Valid Credentials object or None.
     """
+    # Priority 1: Try to load from environment variables first
+    env_credentials = load_credentials_from_env()
+    if env_credentials:
+        logger.info(
+            f"[get_credentials] Using credentials from environment variables. User: '{user_google_email}', Session: '{session_id}'"
+        )
+        
+        # Validate scopes if provided in environment
+        if env_credentials.scopes and not all(scope in env_credentials.scopes for scope in required_scopes):
+            logger.warning(
+                f"[get_credentials] Environment credentials lack required scopes. Need: {required_scopes}, Have: {env_credentials.scopes}. User: '{user_google_email}', Session: '{session_id}'"
+            )
+            # Don't return None here, let it fall through to other methods
+        else:
+            # Use proactive refresh logic for environment credentials
+            refreshed_credentials = _refresh_credentials_if_needed(
+                credentials=env_credentials,
+                user_google_email=user_google_email,
+                session_id=session_id,
+                credentials_base_dir=credentials_base_dir
+            )
+            
+            if refreshed_credentials and refreshed_credentials.valid:
+                logger.info(
+                    f"[get_credentials] Successfully using environment credentials. User: '{user_google_email}', Session: '{session_id}'"
+                )
+                return refreshed_credentials
+            else:
+                logger.warning(
+                    f"[get_credentials] Environment credentials failed validation/refresh. User: '{user_google_email}', Session: '{session_id}'"
+                )
+
     # Check for single-user mode
     if os.getenv("MCP_SINGLE_USER_MODE") == "1":
         logger.info(
@@ -631,53 +1076,28 @@ def get_credentials(
         f"[get_credentials] Credentials have sufficient scopes. User: '{user_google_email}', Session: '{session_id}'"
     )
 
-    if credentials.valid:
+    # Use proactive refresh logic
+    refreshed_credentials = _refresh_credentials_if_needed(
+        credentials=credentials,
+        user_google_email=user_google_email,
+        session_id=session_id,
+        credentials_base_dir=credentials_base_dir
+    )
+    
+    if refreshed_credentials is None:
+        logger.warning(
+            f"[get_credentials] Failed to refresh credentials. User: '{user_google_email}', Session: '{session_id}'"
+        )
+        return None
+    
+    if refreshed_credentials.valid:
         logger.debug(
-            f"[get_credentials] Credentials are valid. User: '{user_google_email}', Session: '{session_id}'"
+            f"[get_credentials] Credentials are valid (after refresh check). User: '{user_google_email}', Session: '{session_id}'"
         )
-        return credentials
-    elif credentials.expired and credentials.refresh_token:
-        logger.info(
-            f"[get_credentials] Credentials expired. Attempting refresh. User: '{user_google_email}', Session: '{session_id}'"
-        )
-        if not client_secrets_path:
-            logger.error(
-                "[get_credentials] Client secrets path required for refresh but not provided."
-            )
-            return None
-        try:
-            logger.debug(
-                f"[get_credentials] Refreshing token using client_secrets_path: {client_secrets_path}"
-            )
-            # client_config = load_client_secrets(client_secrets_path) # Not strictly needed if creds have client_id/secret
-            credentials.refresh(Request())
-            logger.info(
-                f"[get_credentials] Credentials refreshed successfully. User: '{user_google_email}', Session: '{session_id}'"
-            )
-
-            # Save refreshed credentials
-            if user_google_email:  # Always save to file if email is known
-                save_credentials_to_file(
-                    user_google_email, credentials, credentials_base_dir
-                )
-            if session_id:  # Update session cache if it was the source or is active
-                save_credentials_to_session(session_id, credentials)
-            return credentials
-        except RefreshError as e:
-            logger.warning(
-                f"[get_credentials] RefreshError - token expired/revoked: {e}. User: '{user_google_email}', Session: '{session_id}'"
-            )
-            # For RefreshError, we should return None to trigger reauthentication
-            return None
-        except Exception as e:
-            logger.error(
-                f"[get_credentials] Error refreshing credentials: {e}. User: '{user_google_email}', Session: '{session_id}'",
-                exc_info=True,
-            )
-            return None  # Failed to refresh
+        return refreshed_credentials
     else:
         logger.warning(
-            f"[get_credentials] Credentials invalid/cannot refresh. Valid: {credentials.valid}, Refresh Token: {credentials.refresh_token is not None}. User: '{user_google_email}', Session: '{session_id}'"
+            f"[get_credentials] Credentials invalid after refresh attempt. User: '{user_google_email}', Session: '{session_id}'"
         )
         return None
 
@@ -752,7 +1172,6 @@ async def get_authenticated_google_service(
         get_credentials,
         user_google_email=user_google_email,
         required_scopes=required_scopes,
-        client_secrets_path=CONFIG_CLIENT_SECRETS_PATH,
         session_id=None,  # Session ID not available in service layer
     )
 
