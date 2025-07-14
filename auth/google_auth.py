@@ -218,6 +218,9 @@ def validate_and_refresh_credentials(
         logger.debug(
             f"[validate_and_refresh_credentials] Credentials successfully refreshed. User: '{user_google_email}', Session: '{session_id}'"
         )
+        # Update the original credentials object with the refreshed values
+        credentials.token = refreshed_credentials.token
+        credentials.expiry = refreshed_credentials.expiry
         return True
     
     logger.warning(
@@ -455,10 +458,14 @@ def load_credentials_from_env() -> Optional[Credentials]:
         logger.debug(f"Missing required environment variables for credentials: {missing_vars}")
         return None
     
-    # Parse scopes if provided
+    # Parse scopes if provided, otherwise use default MCP scopes
     scopes = None
     if scopes_str:
         scopes = [scope.strip() for scope in scopes_str.split(",") if scope.strip()]
+    else:
+        # Use default MCP required scopes if not specified in environment
+        from auth.scopes import SCOPES
+        scopes = SCOPES
     
     try:
         credentials = Credentials(
@@ -1032,11 +1039,14 @@ def get_credentials(
                 # Fall through to other methods
         else:
             # Use proactive refresh logic for environment credentials
+            # Force refresh for environment credentials to ensure they work
             refreshed_credentials = _refresh_credentials_if_needed(
                 credentials=env_credentials,
                 user_google_email=user_google_email,
                 session_id=session_id,
-                credentials_base_dir=credentials_base_dir
+                credentials_base_dir=credentials_base_dir,
+                force_refresh=True,  # Force refresh to ensure token is valid
+                retry_count=2
             )
             
             if refreshed_credentials and refreshed_credentials.valid:
@@ -1119,7 +1129,8 @@ def get_credentials(
         f"[get_credentials] Credentials found. Scopes: {credentials.scopes}, Valid: {credentials.valid}, Expired: {credentials.expired}"
     )
 
-    if not all(scope in credentials.scopes for scope in required_scopes):
+    # Check if credentials have required scopes (handle None case)
+    if not credentials.scopes or not all(scope in credentials.scopes for scope in required_scopes):
         logger.warning(
             f"[get_credentials] Credentials lack required scopes. Need: {required_scopes}, Have: {credentials.scopes}. User: '{user_google_email}', Session: '{session_id}'"
         )
