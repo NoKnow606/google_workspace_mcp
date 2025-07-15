@@ -65,8 +65,8 @@ async def search_docs(
 async def get_doc_content(
     drive_service,
     docs_service,
-    user_google_email: Optional[str] = None,
     document_id: str,
+    user_google_email: Optional[str] = None,
 ) -> str:
     """
     Retrieves content of a Google Doc or a Drive file (like .docx) identified by document_id.
@@ -193,8 +193,8 @@ async def list_docs_in_folder(
 @handle_http_errors("create_doc")
 async def create_doc(
     service,
-    user_google_email: Optional[str] = None,
     title: str,
+    user_google_email: Optional[str] = None,
     content: str = '',
 ) -> str:
     """
