@@ -22,8 +22,8 @@ logger = logging.getLogger(__name__)
 @handle_http_errors("create_form")
 async def create_form(
     service,
-    user_google_email: str,
     title: str,
+    user_google_email: Optional[str] = None,
     description: Optional[str] = None,
     document_title: Optional[str] = None
 ) -> str:
@@ -31,7 +31,7 @@ async def create_form(
     Create a new form using the title given in the provided form message in the request.
 
     Args:
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
         title (str): The title of the form.
         description (Optional[str]): The description of the form.
         document_title (Optional[str]): The document title (shown in browser tab).
@@ -71,14 +71,14 @@ async def create_form(
 @handle_http_errors("get_form")
 async def get_form(
     service,
-    user_google_email: str,
-    form_id: str
+    form_id: str,
+    user_google_email: Optional[str] = None
 ) -> str:
     """
     Get a form.
 
     Args:
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
         form_id (str): The ID of the form to retrieve.
 
     Returns:
@@ -127,8 +127,8 @@ async def get_form(
 @handle_http_errors("set_publish_settings")
 async def set_publish_settings(
     service,
-    user_google_email: str,
     form_id: str,
+    user_google_email: Optional[str] = None,
     publish_as_template: bool = False,
     require_authentication: bool = False
 ) -> str:
@@ -136,7 +136,7 @@ async def set_publish_settings(
     Updates the publish settings of a form.
 
     Args:
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
         form_id (str): The ID of the form to update publish settings for.
         publish_as_template (bool): Whether to publish as a template. Defaults to False.
         require_authentication (bool): Whether to require authentication to view/submit. Defaults to False.
@@ -165,15 +165,15 @@ async def set_publish_settings(
 @handle_http_errors("get_form_response")
 async def get_form_response(
     service,
-    user_google_email: str,
     form_id: str,
-    response_id: str
+    response_id: str,
+    user_google_email: Optional[str] = None
 ) -> str:
     """
     Get one response from the form.
 
     Args:
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
         form_id (str): The ID of the form.
         response_id (str): The ID of the response to retrieve.
 
@@ -219,8 +219,8 @@ async def get_form_response(
 @handle_http_errors("list_form_responses")
 async def list_form_responses(
     service,
-    user_google_email: str,
     form_id: str,
+    user_google_email: Optional[str] = None,
     page_size: int = 10,
     page_token: Optional[str] = None
 ) -> str:
@@ -228,7 +228,7 @@ async def list_form_responses(
     List a form's responses.
 
     Args:
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
         form_id (str): The ID of the form.
         page_size (int): Maximum number of responses to return. Defaults to 10.
         page_token (Optional[str]): Token for retrieving next page of results.

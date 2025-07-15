@@ -134,7 +134,7 @@ def _format_gmail_results_plain(messages: list, query: str) -> str:
 @require_google_service("gmail", "gmail_read")
 @handle_http_errors("search_gmail_messages")
 async def search_gmail_messages(
-    service, query: str, user_google_email: str, page_size: int = 10
+    service, query: str, user_google_email: Optional[str] = None, page_size: int = 10
 ) -> str:
     """
     Searches messages in a user's Gmail account based on a query.
@@ -142,12 +142,19 @@ async def search_gmail_messages(
 
     Args:
         query (str): The search query. Supports standard Gmail search operators.
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected from the refresh token.
         page_size (int): The maximum number of messages to return. Defaults to 10.
 
     Returns:
         str: LLM-friendly structured results with Message IDs, Thread IDs, and clickable Gmail web interface URLs for each found message.
     """
+    # Auto-detect user email if not provided
+    if not user_google_email:
+        from auth.google_auth import get_default_user_email_from_env
+        user_google_email = get_default_user_email_from_env()
+        if not user_google_email:
+            raise ValueError("Could not determine user email. Please provide user_google_email parameter or ensure environment variables are set correctly.")
+    
     logger.info(f"[search_gmail_messages] Email: '{user_google_email}', Query: '{query}'")
 
     response = await asyncio.to_thread(

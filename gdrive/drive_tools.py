@@ -80,8 +80,8 @@ def _build_drive_list_params(
 @handle_http_errors("search_drive_files")
 async def search_drive_files(
     service,
-    user_google_email: str,
     query: str,
+    user_google_email: Optional[str] = None,
     page_size: int = 10,
     drive_id: Optional[str] = None,
     include_items_from_all_drives: bool = True,
@@ -91,7 +91,7 @@ async def search_drive_files(
     Searches for files and folders within a user's Google Drive, including shared drives.
 
     Args:
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
         query (str): The search query string. Supports Google Drive search operators.
         page_size (int): The maximum number of files to return. Defaults to 10.
         drive_id (Optional[str]): ID of the shared drive to search. If None, behavior depends on `corpora` and `include_items_from_all_drives`.
@@ -147,8 +147,8 @@ async def search_drive_files(
 @handle_http_errors("get_drive_file_content")
 async def get_drive_file_content(
     service,
-    user_google_email: str,
     file_id: str,
+    user_google_email: Optional[str] = None,
 ) -> str:
     """
     Retrieves the content of a specific Google Drive file by ID, supporting files in shared drives.
@@ -237,7 +237,7 @@ async def get_drive_file_content(
 @handle_http_errors("list_drive_items")
 async def list_drive_items(
     service,
-    user_google_email: str,
+    user_google_email: Optional[str] = None,
     folder_id: str = 'root',
     page_size: int = 100,
     drive_id: Optional[str] = None,
@@ -250,7 +250,7 @@ async def list_drive_items(
     If `drive_id` is not specified, lists items from user's "My Drive" and accessible shared drives (if `include_items_from_all_drives` is True).
 
     Args:
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
         folder_id (str): The ID of the Google Drive folder. Defaults to 'root'. For a shared drive, this can be the shared drive's ID to list its root, or a folder ID within that shared drive.
         page_size (int): The maximum number of items to return. Defaults to 100.
         drive_id (Optional[str]): ID of the shared drive. If provided, the listing is scoped to this drive.
@@ -293,8 +293,8 @@ async def list_drive_items(
 @handle_http_errors("create_drive_file")
 async def create_drive_file(
     service,
-    user_google_email: str,
     file_name: str,
+    user_google_email: Optional[str] = None,
     content: Optional[str] = None,  # Now explicitly Optional
     folder_id: str = 'root',
     mime_type: str = 'text/plain',
@@ -305,7 +305,7 @@ async def create_drive_file(
     Accepts either direct content or a fileUrl to fetch the content from.
 
     Args:
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
         file_name (str): The name for the new file.
         content (Optional[str]): If provided, the content to write to the file.
         folder_id (str): The ID of the parent folder. Defaults to 'root'. For shared drives, this must be a folder ID within the shared drive.

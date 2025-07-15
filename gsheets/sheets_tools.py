@@ -25,14 +25,14 @@ logger = logging.getLogger(__name__)
 @handle_http_errors("list_spreadsheets")
 async def list_spreadsheets(
     service,
-    user_google_email: str,
+    user_google_email: Optional[str] = None,
     max_results: int = 25,
 ) -> str:
     """
     Lists spreadsheets from Google Drive that the user has access to.
 
     Args:
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
         max_results (int): Maximum number of spreadsheets to return. Defaults to 25.
 
     Returns:
@@ -74,14 +74,14 @@ async def list_spreadsheets(
 @handle_http_errors("get_spreadsheet_info")
 async def get_spreadsheet_info(
     service,
-    user_google_email: str,
     spreadsheet_id: str,
+    user_google_email: Optional[str] = None,
 ) -> str:
     """
     Gets information about a specific spreadsheet including its sheets.
 
     Args:
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
         spreadsheet_id (str): The ID of the spreadsheet to get info for. Required.
 
     Returns:
@@ -124,15 +124,15 @@ async def get_spreadsheet_info(
 @handle_http_errors("read_sheet_values")
 async def read_sheet_values(
     service,
-    user_google_email: str,
     spreadsheet_id: str,
+    user_google_email: Optional[str] = None,
     range_name: str = "A1:Z1000",
 ) -> str:
     """
     Reads values from a specific range in a Google Sheet.
 
     Args:
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
         spreadsheet_id (str): The ID of the spreadsheet. Required.
         range_name (str): The range to read (e.g., "Sheet1!A1:D10", "A1:D10"). Defaults to "A1:Z1000".
 
@@ -174,9 +174,9 @@ async def read_sheet_values(
 @handle_http_errors("modify_sheet_values")
 async def modify_sheet_values(
     service,
-    user_google_email: str,
     spreadsheet_id: str,
     range_name: str,
+    user_google_email: Optional[str] = None,
     values: Optional[List[List[str]]] = None,
     value_input_option: str = "USER_ENTERED",
     clear_values: bool = False,
@@ -185,7 +185,7 @@ async def modify_sheet_values(
     Modifies values in a specific range of a Google Sheet - can write, update, or clear values.
 
     Args:
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
         spreadsheet_id (str): The ID of the spreadsheet. Required.
         range_name (str): The range to modify (e.g., "Sheet1!A1:D10", "A1:D10"). Required.
         values (Optional[List[List[str]]]): 2D array of values to write/update. Required unless clear_values=True.
@@ -245,15 +245,15 @@ async def modify_sheet_values(
 @handle_http_errors("create_spreadsheet")
 async def create_spreadsheet(
     service,
-    user_google_email: str,
     title: str,
+    user_google_email: Optional[str] = None,
     sheet_names: Optional[List[str]] = None,
 ) -> str:
     """
     Creates a new Google Spreadsheet.
 
     Args:
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
         title (str): The title of the new spreadsheet. Required.
         sheet_names (Optional[List[str]]): List of sheet names to create. If not provided, creates one sheet with default name.
 
@@ -294,15 +294,15 @@ async def create_spreadsheet(
 @handle_http_errors("create_sheet")
 async def create_sheet(
     service,
-    user_google_email: str,
     spreadsheet_id: str,
     sheet_name: str,
+    user_google_email: Optional[str] = None,
 ) -> str:
     """
     Creates a new sheet within an existing spreadsheet.
 
     Args:
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
         spreadsheet_id (str): The ID of the spreadsheet. Required.
         sheet_name (str): The name of the new sheet. Required.
 

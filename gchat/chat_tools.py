@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 @handle_http_errors("list_spaces")
 async def list_spaces(
     service,
-    user_google_email: str,
+    user_google_email: Optional[str] = None,
     page_size: int = 100,
     space_type: str = "all"  # "all", "room", "dm"
 ) -> str:
@@ -67,10 +67,10 @@ async def list_spaces(
 @handle_http_errors("get_messages")
 async def get_messages(
     service,
-    user_google_email: str,
     space_id: str,
     page_size: int = 50,
-    order_by: str = "createTime desc"
+    order_by: str = "createTime desc",
+    user_google_email: Optional[str] = None,
 ) -> str:
     """
     Retrieves messages from a Google Chat space.
@@ -117,9 +117,9 @@ async def get_messages(
 @handle_http_errors("send_message")
 async def send_message(
     service,
-    user_google_email: str,
     space_id: str,
     message_text: str,
+    user_google_email: Optional[str] = None,
     thread_key: Optional[str] = None
 ) -> str:
     """
@@ -158,8 +158,8 @@ async def send_message(
 @handle_http_errors("search_messages")
 async def search_messages(
     service,
-    user_google_email: str,
     query: str,
+    user_google_email: Optional[str] = None,
     space_id: Optional[str] = None,
     page_size: int = 25
 ) -> str:

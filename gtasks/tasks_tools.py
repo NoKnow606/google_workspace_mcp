@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 @require_google_service("tasks", "tasks_read")
 async def list_task_lists(
     service,
-    user_google_email: str,
+    user_google_email: Optional[str] = None,
     max_results: Optional[int] = None,
     page_token: Optional[str] = None
 ) -> str:
@@ -29,7 +29,7 @@ async def list_task_lists(
     List all task lists for the user.
 
     Args:
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
         max_results (Optional[int]): Maximum number of task lists to return (default: 1000, max: 1000).
         page_token (Optional[str]): Token for pagination.
 
@@ -80,14 +80,14 @@ async def list_task_lists(
 @require_google_service("tasks", "tasks_read")
 async def get_task_list(
     service,
-    user_google_email: str,
-    task_list_id: str
+    task_list_id: str,
+    user_google_email: Optional[str] = None
 ) -> str:
     """
     Get details of a specific task list.
 
     Args:
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
         task_list_id (str): The ID of the task list to retrieve.
 
     Returns:
@@ -123,14 +123,14 @@ async def get_task_list(
 @require_google_service("tasks", "tasks")
 async def create_task_list(
     service,
-    user_google_email: str,
-    title: str
+    title: str,
+    user_google_email: Optional[str] = None
 ) -> str:
     """
     Create a new task list.
 
     Args:
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
         title (str): The title of the new task list.
 
     Returns:
@@ -170,15 +170,15 @@ async def create_task_list(
 @require_google_service("tasks", "tasks")
 async def update_task_list(
     service,
-    user_google_email: str,
     task_list_id: str,
-    title: str
+    title: str,
+    user_google_email: Optional[str] = None
 ) -> str:
     """
     Update an existing task list.
 
     Args:
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
         task_list_id (str): The ID of the task list to update.
         title (str): The new title for the task list.
 
@@ -219,14 +219,14 @@ async def update_task_list(
 @require_google_service("tasks", "tasks")
 async def delete_task_list(
     service,
-    user_google_email: str,
-    task_list_id: str
+    task_list_id: str,
+    user_google_email: Optional[str] = None
 ) -> str:
     """
     Delete a task list. Note: This will also delete all tasks in the list.
 
     Args:
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
         task_list_id (str): The ID of the task list to delete.
 
     Returns:
@@ -258,8 +258,8 @@ async def delete_task_list(
 @require_google_service("tasks", "tasks_read")
 async def list_tasks(
     service,
-    user_google_email: str,
     task_list_id: str,
+    user_google_email: Optional[str] = None,
     max_results: Optional[int] = None,
     page_token: Optional[str] = None,
     show_completed: Optional[bool] = None,
@@ -276,7 +276,7 @@ async def list_tasks(
     List all tasks in a specific task list.
 
     Args:
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
         task_list_id (str): The ID of the task list to retrieve tasks from.
         max_results (Optional[int]): Maximum number of tasks to return (default: 20, max: 100).
         page_token (Optional[str]): Token for pagination.
@@ -363,15 +363,15 @@ async def list_tasks(
 @require_google_service("tasks", "tasks_read")
 async def get_task(
     service,
-    user_google_email: str,
     task_list_id: str,
-    task_id: str
+    task_id: str,
+    user_google_email: Optional[str] = None
 ) -> str:
     """
     Get details of a specific task.
 
     Args:
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
         task_list_id (str): The ID of the task list containing the task.
         task_id (str): The ID of the task to retrieve.
 
@@ -423,9 +423,9 @@ async def get_task(
 @require_google_service("tasks", "tasks")
 async def create_task(
     service,
-    user_google_email: str,
     task_list_id: str,
     title: str,
+    user_google_email: Optional[str] = None,
     notes: Optional[str] = None,
     due: Optional[str] = None,
     parent: Optional[str] = None,
@@ -435,7 +435,7 @@ async def create_task(
     Create a new task in a task list.
 
     Args:
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
         task_list_id (str): The ID of the task list to create the task in.
         title (str): The title of the task.
         notes (Optional[str]): Notes/description for the task.
@@ -497,9 +497,9 @@ async def create_task(
 @require_google_service("tasks", "tasks")
 async def update_task(
     service,
-    user_google_email: str,
     task_list_id: str,
     task_id: str,
+    user_google_email: Optional[str] = None,
     title: Optional[str] = None,
     notes: Optional[str] = None,
     status: Optional[str] = None,
@@ -509,7 +509,7 @@ async def update_task(
     Update an existing task.
 
     Args:
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
         task_list_id (str): The ID of the task list containing the task.
         task_id (str): The ID of the task to update.
         title (Optional[str]): New title for the task.
@@ -578,15 +578,15 @@ async def update_task(
 @require_google_service("tasks", "tasks")
 async def delete_task(
     service,
-    user_google_email: str,
     task_list_id: str,
-    task_id: str
+    task_id: str,
+    user_google_email: Optional[str] = None
 ) -> str:
     """
     Delete a task from a task list.
 
     Args:
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
         task_list_id (str): The ID of the task list containing the task.
         task_id (str): The ID of the task to delete.
 
@@ -619,9 +619,9 @@ async def delete_task(
 @require_google_service("tasks", "tasks")
 async def move_task(
     service,
-    user_google_email: str,
     task_list_id: str,
     task_id: str,
+    user_google_email: Optional[str] = None,
     parent: Optional[str] = None,
     previous: Optional[str] = None,
     destination_task_list: Optional[str] = None
@@ -630,7 +630,7 @@ async def move_task(
     Move a task to a different position or parent within the same list, or to a different list.
 
     Args:
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
         task_list_id (str): The ID of the current task list containing the task.
         task_id (str): The ID of the task to move.
         parent (Optional[str]): New parent task ID (for making it a subtask).
@@ -697,14 +697,14 @@ async def move_task(
 @require_google_service("tasks", "tasks")
 async def clear_completed_tasks(
     service,
-    user_google_email: str,
-    task_list_id: str
+    task_list_id: str,
+    user_google_email: Optional[str] = None
 ) -> str:
     """
     Clear all completed tasks from a task list. The tasks will be marked as hidden.
 
     Args:
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
         task_list_id (str): The ID of the task list to clear completed tasks from.
 
     Returns:

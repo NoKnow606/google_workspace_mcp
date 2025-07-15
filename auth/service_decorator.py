@@ -225,9 +225,16 @@ def require_google_service(
             user_google_email = bound_args.arguments.get('user_google_email')
 
             if not user_google_email:
-                # This should ideally not be reached if 'user_google_email' is a required parameter
-                # in the function signature, but it's a good safeguard.
-                raise Exception("'user_google_email' parameter is required but was not found.")
+                # Try to auto-detect user email from environment variables
+                try:
+                    from auth.google_auth import get_default_user_email_from_env
+                    user_google_email = get_default_user_email_from_env()
+                    logger.info(f"Auto-detected user email: {user_google_email}")
+                except Exception as e:
+                    logger.warning(f"Failed to auto-detect user email: {e}")
+                
+                if not user_google_email:
+                    raise Exception("'user_google_email' parameter is required but was not found, and auto-detection failed. Please provide user_google_email parameter or ensure environment variables are set correctly.")
 
             # Get service configuration from the decorator's arguments
             if service_type not in SERVICE_CONFIGS:

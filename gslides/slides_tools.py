@@ -24,14 +24,14 @@ logger = logging.getLogger(__name__)
 @handle_http_errors("create_presentation")
 async def create_presentation(
     service,
-    user_google_email: str,
+    user_google_email: Optional[str] = None,
     title: str = "Untitled Presentation"
 ) -> str:
     """
     Create a new Google Slides presentation.
 
     Args:
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
         title (str): The title for the new presentation. Defaults to "Untitled Presentation".
 
     Returns:
@@ -65,14 +65,14 @@ async def create_presentation(
 @handle_http_errors("get_presentation")
 async def get_presentation(
     service,
-    user_google_email: str,
-    presentation_id: str
+    presentation_id: str,
+    user_google_email: Optional[str] = None
 ) -> str:
     """
     Get details about a Google Slides presentation.
 
     Args:
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
         presentation_id (str): The ID of the presentation to retrieve.
 
     Returns:
@@ -113,15 +113,15 @@ Slides Breakdown:
 @handle_http_errors("batch_update_presentation")
 async def batch_update_presentation(
     service,
-    user_google_email: str,
     presentation_id: str,
-    requests: List[Dict[str, Any]]
+    requests: List[Dict[str, Any]],
+    user_google_email: Optional[str] = None
 ) -> str:
     """
     Apply batch updates to a Google Slides presentation.
 
     Args:
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
         presentation_id (str): The ID of the presentation to update.
         requests (List[Dict[str, Any]]): List of update requests to apply.
 
@@ -170,15 +170,15 @@ async def batch_update_presentation(
 @handle_http_errors("get_page")
 async def get_page(
     service,
-    user_google_email: str,
     presentation_id: str,
-    page_object_id: str
+    page_object_id: str,
+    user_google_email: Optional[str] = None
 ) -> str:
     """
     Get details about a specific page (slide) in a presentation.
 
     Args:
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
         presentation_id (str): The ID of the presentation.
         page_object_id (str): The object ID of the page/slide to retrieve.
 
@@ -232,16 +232,16 @@ Page Elements:
 @handle_http_errors("get_page_thumbnail")
 async def get_page_thumbnail(
     service,
-    user_google_email: str,
     presentation_id: str,
     page_object_id: str,
+    user_google_email: Optional[str] = None,
     thumbnail_size: str = "MEDIUM"
 ) -> str:
     """
     Generate a thumbnail URL for a specific page (slide) in a presentation.
 
     Args:
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
         presentation_id (str): The ID of the presentation.
         page_object_id (str): The object ID of the page/slide.
         thumbnail_size (str): Size of thumbnail ("LARGE", "MEDIUM", "SMALL"). Defaults to "MEDIUM".

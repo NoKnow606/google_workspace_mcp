@@ -82,12 +82,12 @@ def _correct_time_format_for_api(
 @server.tool()
 @require_google_service("calendar", "calendar_read")
 @handle_http_errors("list_calendars")
-async def list_calendars(service, user_google_email: str) -> str:
+async def list_calendars(service, user_google_email: Optional[str] = None) -> str:
     """
     Retrieves a list of calendars accessible to the authenticated user.
 
     Args:
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
 
     Returns:
         str: A formatted list of the user's calendars (summary, ID, primary status).
@@ -118,7 +118,7 @@ async def list_calendars(service, user_google_email: str) -> str:
 @handle_http_errors("get_events")
 async def get_events(
     service,
-    user_google_email: str,
+    user_google_email: Optional[str] = None,
     calendar_id: str = "primary",
     time_min: Optional[str] = None,
     time_max: Optional[str] = None,
@@ -128,7 +128,7 @@ async def get_events(
     Retrieves a list of events from a specified Google Calendar within a given time range.
 
     Args:
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
         calendar_id (str): The ID of the calendar to query. Use 'primary' for the user's primary calendar. Defaults to 'primary'. Calendar IDs can be obtained using `list_calendars`.
         time_min (Optional[str]): The start of the time range (inclusive) in RFC3339 format (e.g., '2024-05-12T10:00:00Z' or '2024-05-12'). If omitted, defaults to the current time.
         time_max (Optional[str]): The end of the time range (exclusive) in RFC3339 format. If omitted, events starting from `time_min` onwards are considered (up to `max_results`).
@@ -206,10 +206,10 @@ async def get_events(
 @handle_http_errors("create_event")
 async def create_event(
     service,
-    user_google_email: str,
     summary: str,
     start_time: str,
     end_time: str,
+    user_google_email: Optional[str] = None,
     calendar_id: str = "primary",
     description: Optional[str] = None,
     location: Optional[str] = None,
@@ -221,10 +221,10 @@ async def create_event(
     Creates a new event.
 
     Args:
-        user_google_email (str): The user's Google email address. Required.
         summary (str): Event title.
         start_time (str): Start time (RFC3339, e.g., "2023-10-27T10:00:00-07:00" or "2023-10-27" for all-day).
         end_time (str): End time (RFC3339, e.g., "2023-10-27T11:00:00-07:00" or "2023-10-28" for all-day).
+        user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
         calendar_id (str): Calendar ID (default: 'primary').
         description (Optional[str]): Event description.
         location (Optional[str]): Event location.
@@ -330,8 +330,8 @@ async def create_event(
 @handle_http_errors("modify_event")
 async def modify_event(
     service,
-    user_google_email: str,
     event_id: str,
+    user_google_email: Optional[str] = None,
     calendar_id: str = "primary",
     summary: Optional[str] = None,
     start_time: Optional[str] = None,
@@ -345,7 +345,7 @@ async def modify_event(
     Modifies an existing event.
 
     Args:
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
         event_id (str): The ID of the event to modify.
         calendar_id (str): Calendar ID (default: 'primary').
         summary (Optional[str]): New event title.
@@ -448,12 +448,12 @@ async def modify_event(
 @server.tool()
 @require_google_service("calendar", "calendar_events")
 @handle_http_errors("delete_event")
-async def delete_event(service, user_google_email: str, event_id: str, calendar_id: str = "primary") -> str:
+async def delete_event(service, event_id: str, user_google_email: Optional[str] = None, calendar_id: str = "primary") -> str:
     """
     Deletes an existing event.
 
     Args:
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
         event_id (str): The ID of the event to delete.
         calendar_id (str): Calendar ID (default: 'primary').
 
@@ -504,15 +504,15 @@ async def delete_event(service, user_google_email: str, event_id: str, calendar_
 @handle_http_errors("get_event")
 async def get_event(
     service,
-    user_google_email: str,
     event_id: str,
+    user_google_email: Optional[str] = None,
     calendar_id: str = "primary"
 ) -> str:
     """
     Retrieves the details of a single event by its ID from a specified Google Calendar.
 
     Args:
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
         event_id (str): The ID of the event to retrieve. Required.
         calendar_id (str): The ID of the calendar to query. Defaults to 'primary'.
 

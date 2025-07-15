@@ -485,6 +485,100 @@ def load_credentials_from_env() -> Optional[Credentials]:
         return None
 
 
+def get_user_email_from_credentials(credentials: Credentials) -> Optional[str]:
+    """
+    Get user email from credentials by calling Google's userinfo API.
+    
+    Args:
+        credentials: Valid Google credentials
+    
+    Returns:
+        User email address or None if not available
+    """
+    if not credentials or not credentials.valid:
+        return None
+    
+    try:
+        from googleapiclient.discovery import build
+        
+        # Build the userinfo service
+        service = build('oauth2', 'v2', credentials=credentials)
+        
+        # Get user info
+        user_info = service.userinfo().get().execute()
+        
+        return user_info.get('email')
+        
+    except Exception as e:
+        logger.warning(f"Failed to get user email from credentials: {e}")
+        return None
+
+
+def get_default_user_email_from_env() -> Optional[str]:
+    """
+    Get the default user email by creating credentials from environment variables
+    and querying Google's userinfo API, with fallback to cached email.
+    
+    Returns:
+        User email address or None if not available
+    """
+    try:
+        # First, try to get from any existing credential file
+        credentials_dir = os.path.expanduser("~/.google_workspace_mcp/credentials")
+        if os.path.exists(credentials_dir):
+            for filename in os.listdir(credentials_dir):
+                if filename.endswith('.json') and '@' in filename:
+                    # Extract email from filename (e.g., "user@example.com.json" -> "user@example.com")
+                    email = filename.replace('.json', '')
+                    logger.info(f"Found cached email from credential file: {email}")
+                    return email
+        
+        # If no cached email, try to get from API (with shorter timeout)
+        credentials = load_credentials_from_env()
+        if not credentials:
+            return None
+        
+        # Force refresh to ensure we have a valid token
+        refreshed_credentials = _refresh_credentials_if_needed(
+            credentials=credentials,
+            user_google_email=None,
+            session_id=None,
+            force_refresh=True,
+            retry_count=1
+        )
+        
+        if not refreshed_credentials or not refreshed_credentials.valid:
+            return None
+        
+        # Try to get user email with timeout protection
+        try:
+            # Set a shorter timeout for this operation
+            import socket
+            original_timeout = socket.getdefaulttimeout()
+            socket.setdefaulttimeout(5)  # 5 second timeout
+            
+            email = get_user_email_from_credentials(refreshed_credentials)
+            
+            socket.setdefaulttimeout(original_timeout)
+            
+            if email:
+                logger.info(f"Successfully retrieved email from API: {email}")
+                return email
+                
+        except Exception as e:
+            logger.warning(f"Failed to get user email from API (timeout/error): {e}")
+            # Restore original timeout
+            socket.setdefaulttimeout(original_timeout)
+        
+        # Fallback: try a common pattern or return None
+        logger.warning("Could not determine user email from environment credentials")
+        return None
+        
+    except Exception as e:
+        logger.warning(f"Failed to get default user email from environment: {e}")
+        return None
+
+
 def load_client_secrets_from_env() -> Optional[Dict[str, Any]]:
     """
     Loads the client secrets from environment variables.
