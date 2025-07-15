@@ -86,12 +86,11 @@ A production-ready MCP server that integrates all major Google Workspace service
 <details>
 <summary>Environment - you will configure these in Claude itself, see screenshot:</summary>
 
-| Variable | Purpose |
-|----------|---------|
+| Variable | Purpose                           |
+|----------|-----------------------------------|
 | `GOOGLE_OAUTH_CLIENT_ID` | OAuth client ID from Google Cloud |
-| `GOOGLE_OAUTH_CLIENT_SECRET` | OAuth client secret |
-| `USER_GOOGLE_EMAIL` *(optional)* | Default email for single-user auth |
-| `OAUTHLIB_INSECURE_TRANSPORT=1` | Development only (allows `http://` redirect) |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | OAuth client secret               |
+| `GOOGLE_OAUTH_REFRESH_TOKEN` | OAuth refresh token               |
 
 Claude Desktop stores these securely in the OS keychain; set them once in the extension pane.
 </details>
@@ -161,7 +160,6 @@ uv run main.py
      ```bash
      export GOOGLE_OAUTH_CLIENT_ID="your-client-id.apps.googleusercontent.com"
      export GOOGLE_OAUTH_CLIENT_SECRET="your-client-secret"
-     export GOOGLE_OAUTH_REDIRECT_URI="http://localhost:8000/oauth2callback"  # Optional
      ```
 
      **Option B: File-based (Traditional)**
@@ -188,10 +186,6 @@ uv run main.py
 
 3. **Server Configuration**:
    The server's base URL and port can be customized using environment variables:
-   - `WORKSPACE_MCP_BASE_URI`: Sets the base URI for the server (default: http://localhost). This affects the `server_url` used to construct the default `OAUTH_REDIRECT_URI` if `GOOGLE_OAUTH_REDIRECT_URI` is not set.
-   - `WORKSPACE_MCP_PORT`: Sets the port the server listens on (default: 8000). This affects the server_url, port, and OAUTH_REDIRECT_URI.
-   - `USER_GOOGLE_EMAIL`: Optional default email for authentication flows. If set, the LLM won't need to specify your email when calling `start_google_auth`.
-   - `GOOGLE_OAUTH_REDIRECT_URI`: Sets an override for OAuth redirect specifically, must include a full address (i.e. include port if necessary). Use this if you want to run your OAuth redirect separately from the MCP. This is not recommended outside of very specific cases
 
 ### Start the Server
 
@@ -251,7 +245,7 @@ After running the script, just restart Claude Desktop and you're ready to go.
          "env": {
            "GOOGLE_OAUTH_CLIENT_ID": "your-client-id.apps.googleusercontent.com",
            "GOOGLE_OAUTH_CLIENT_SECRET": "your-client-secret",
-           "OAUTHLIB_INSECURE_TRANSPORT": "1"
+           "GOOGLE_OAUTH_REFRESH_TOKEN": "your-refresh-token"
          }
        }
      }
@@ -278,7 +272,7 @@ After running the script, just restart Claude Desktop and you're ready to go.
       "env": {
         "GOOGLE_OAUTH_CLIENT_ID": "your-client-id.apps.googleusercontent.com",
         "GOOGLE_OAUTH_CLIENT_SECRET": "your-client-secret",
-        "OAUTHLIB_INSECURE_TRANSPORT": "1"
+        "GOOGLE_OAUTH_REFRESH_TOKEN": "your-refresh-token"
       }
     }
   }
