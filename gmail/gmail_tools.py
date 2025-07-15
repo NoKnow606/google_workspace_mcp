@@ -174,14 +174,14 @@ async def search_gmail_messages(
 @require_google_service("gmail", "gmail_read")
 @handle_http_errors("get_gmail_message_content")
 async def get_gmail_message_content(
-    service, message_id: str, user_google_email: str
+    service, message_id: str, user_google_email: Optional[str] = None
 ) -> str:
     """
     Retrieves the full content (subject, sender, plain text body) of a specific Gmail message.
 
     Args:
         message_id (str): The unique ID of the Gmail message to retrieve.
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. Optional.
 
     Returns:
         str: The message details including subject, sender, and body content.
@@ -244,7 +244,7 @@ async def get_gmail_message_content(
 async def get_gmail_messages_content_batch(
     service,
     message_ids: List[str],
-    user_google_email: str,
+    user_google_email: Optional[str] = None,
     format: Literal["full", "metadata"] = "full",
 ) -> str:
     """
@@ -253,7 +253,7 @@ async def get_gmail_messages_content_batch(
 
     Args:
         message_ids (List[str]): List of Gmail message IDs to retrieve (max 100).
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. Optional.
         format (Literal["full", "metadata"]): Message format. "full" includes body, "metadata" only headers.
 
     Returns:
@@ -396,7 +396,7 @@ async def get_gmail_messages_content_batch(
 @handle_http_errors("send_gmail_message")
 async def send_gmail_message(
     service,
-    user_google_email: str,
+    user_google_email: Optional[str] = None,
     to: str = Body(..., description="Recipient email address."),
     subject: str = Body(..., description="Email subject."),
     body: str = Body(..., description="Email body (plain text)."),
@@ -408,7 +408,7 @@ async def send_gmail_message(
         to (str): Recipient email address.
         subject (str): Email subject.
         body (str): Email body (plain text).
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. Optional.
 
     Returns:
         str: Confirmation message with the sent email's message ID.
@@ -433,7 +433,7 @@ async def send_gmail_message(
 @handle_http_errors("draft_gmail_message")
 async def draft_gmail_message(
     service,
-    user_google_email: str,
+    user_google_email: Optional[str] = None,
     subject: str = Body(..., description="Email subject."),
     body: str = Body(..., description="Email body (plain text)."),
     to: Optional[str] = Body(None, description="Optional recipient email address."),
@@ -442,7 +442,7 @@ async def draft_gmail_message(
     Creates a draft email in the user's Gmail account.
 
     Args:
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. Optional.
         subject (str): Email subject.
         body (str): Email body (plain text).
         to (Optional[str]): Optional recipient email address. Can be left empty for drafts.
@@ -479,14 +479,14 @@ async def draft_gmail_message(
 @require_google_service("gmail", "gmail_read")
 @handle_http_errors("get_gmail_thread_content")
 async def get_gmail_thread_content(
-    service, thread_id: str, user_google_email: str
+    service, thread_id: str, user_google_email: Optional[str] = None
 ) -> str:
     """
     Retrieves the complete content of a Gmail conversation thread, including all messages.
 
     Args:
         thread_id (str): The unique ID of the Gmail thread to retrieve.
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. Optional.
 
     Returns:
         str: The complete thread content with all messages formatted for reading.
@@ -567,12 +567,12 @@ async def get_gmail_thread_content(
 @server.tool()
 @require_google_service("gmail", "gmail_read")
 @handle_http_errors("list_gmail_labels")
-async def list_gmail_labels(service, user_google_email: str) -> str:
+async def list_gmail_labels(service, user_google_email: Optional[str] = None) -> str:
     """
     Lists all labels in the user's Gmail account.
 
     Args:
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (str): The user's Google email address. Optional.
 
     Returns:
         str: A formatted list of all labels with their IDs, names, and types.
@@ -617,8 +617,8 @@ async def list_gmail_labels(service, user_google_email: str) -> str:
 @handle_http_errors("manage_gmail_label")
 async def manage_gmail_label(
     service,
-    user_google_email: str,
     action: Literal["create", "update", "delete"],
+    user_google_email: Optional[str] = None,
     name: Optional[str] = None,
     label_id: Optional[str] = None,
     label_list_visibility: Literal["labelShow", "labelHide"] = "labelShow",
@@ -628,7 +628,7 @@ async def manage_gmail_label(
     Manages Gmail labels: create, update, or delete labels.
 
     Args:
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. Optional.
         action (Literal["create", "update", "delete"]): Action to perform on the label.
         name (Optional[str]): Label name. Required for create, optional for update.
         label_id (Optional[str]): Label ID. Required for update and delete operations.
@@ -691,8 +691,8 @@ async def manage_gmail_label(
 @handle_http_errors("modify_gmail_message_labels")
 async def modify_gmail_message_labels(
     service,
-    user_google_email: str,
     message_id: str,
+    user_google_email: Optional[str] = None,
     add_label_ids: Optional[List[str]] = None,
     remove_label_ids: Optional[List[str]] = None,
 ) -> str:
@@ -700,7 +700,7 @@ async def modify_gmail_message_labels(
     Adds or removes labels from a Gmail message.
 
     Args:
-        user_google_email (str): The user's Google email address. Required.
+        user_google_email (Optional[str]): The user's Google email address. Optional.
         message_id (str): The ID of the message to modify.
         add_label_ids (Optional[List[str]]): List of label IDs to add to the message.
         remove_label_ids (Optional[List[str]]): List of label IDs to remove from the message.
