@@ -47,7 +47,7 @@ def create_comment_tools(app_name: str, file_id_param: str):
 
         @require_google_service("drive", "drive_file")
         @handle_http_errors(create_func_name)
-        async def create_comment(service, document_id: str, comment_content: str, , user_google_email: Optional[str] = None) -> str:
+        async def create_comment(service, document_id: str, comment_content: str , user_google_email: Optional[str] = None) -> str:
             """Create a new comment on a Google Document."""
             return await _create_comment_impl(service, app_name, document_id, comment_content)
 
