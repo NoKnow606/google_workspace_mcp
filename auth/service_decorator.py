@@ -314,15 +314,17 @@ def require_multiple_services(service_configs: List[Dict[str, Any]]):
             param_names = list(sig.parameters.keys())
 
             user_google_email = None
+
             if 'user_google_email' in kwargs:
                 user_google_email = kwargs['user_google_email']
+
             else:
                 try:
-                    user_email_index = param_names.index('user_google_email')
-                    if user_email_index < len(args):
-                        user_google_email = args[user_email_index]
-                except ValueError:
-                    pass
+                    from auth.google_auth import get_default_user_email_from_env
+                    user_google_email = get_default_user_email_from_env()
+                    logger.info(f"Auto-detected user email: {user_google_email}")
+                except Exception as e:
+                    logger.warning(f"Failed to auto-detect user email: {e}")
 
             if not user_google_email:
                 raise Exception("user_google_email parameter is required but not found")
