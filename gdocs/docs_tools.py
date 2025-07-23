@@ -7,6 +7,7 @@ import logging
 import asyncio
 import io
 from typing import List, Optional
+from uuid import uuid4
 
 from mcp import types
 from googleapiclient.http import MediaIoBaseDownload
@@ -18,6 +19,148 @@ from core.server import server
 from core.comments import create_comment_tools
 
 logger = logging.getLogger(__name__)
+
+def process_tabs_recursively(tabs: List, level: int = 0) -> List[str]:
+    """
+    Recursively process tabs and their child tabs.
+    
+    Args:
+        tabs: List of tab objects from Google Docs API
+        level: Current nesting level for indentation
+        
+    Returns:
+        List[str]: List of processed text lines from all tabs
+    """
+    processed_lines: List[str] = []
+    indent = "  " * level  # Indentation based on nesting level
+    
+    for i, tab in enumerate(tabs):
+        tab_properties = tab.get('tabProperties', {})
+        tab_title = tab_properties.get('title', f'Tab {i+1}')
+        tab_id = tab_properties.get('tabId', 'unknown')
+        
+        logger.info(f"[process_tabs_recursively] Processing tab at level {level}: '{tab_title}' (ID: {tab_id})")
+        processed_lines.append(f"\n{indent}=== TAB {i+1}: {tab_title} (ID: {tab_id}) ===\n")
+        
+        # Process document content for this tab
+        document_tab = tab.get('documentTab', {})
+        if document_tab:
+            tab_body = document_tab.get('body', {})
+            if tab_body:
+                tab_content = tab_body.get('content', [])
+                logger.info(f"[process_tabs_recursively] Tab {i} has {len(tab_content)} content elements")
+                
+                if tab_content:
+                    tab_processed_content = process_structural_elements(tab_content)
+                    # Add indentation to content lines
+                    for line in tab_processed_content:
+                        processed_lines.append(f"{indent}{line}")
+                else:
+                    processed_lines.append(f"{indent}[EMPTY TAB CONTENT]\n")
+            else:
+                processed_lines.append(f"{indent}[NO BODY CONTENT]\n")
+        else:
+            processed_lines.append(f"{indent}[NO DOCUMENT TAB CONTENT]\n")
+        
+        # Process child tabs recursively
+        child_tabs = tab.get('childTabs', [])
+        if child_tabs:
+            logger.info(f"[process_tabs_recursively] Tab '{tab_title}' has {len(child_tabs)} child tabs")
+            processed_lines.append(f"{indent}--- CHILD TABS ---\n")
+            processed_lines.extend(process_tabs_recursively(child_tabs, level + 1))
+            processed_lines.append(f"{indent}--- END CHILD TABS ---\n")
+        
+        # Also check for nested tabs in different structure
+        nested_tabs = tab.get('tabs', [])
+        if nested_tabs:
+            logger.info(f"[process_tabs_recursively] Tab '{tab_title}' has {len(nested_tabs)} nested tabs")
+            processed_lines.append(f"{indent}--- NESTED TABS ---\n")
+            processed_lines.extend(process_tabs_recursively(nested_tabs, level + 1))
+            processed_lines.append(f"{indent}--- END NESTED TABS ---\n")
+    
+    return processed_lines
+
+def process_structural_elements(elements: List) -> List[str]:
+    """
+    Process various types of structural elements in a Google Doc.
+    
+    Args:
+        elements: List of structural elements from Google Docs API
+        
+    Returns:
+        List[str]: List of processed text lines
+    """
+    processed_lines: List[str] = []
+    
+    for element in elements:
+        if 'paragraph' in element:
+            # Handle paragraph elements
+            paragraph = element.get('paragraph', {})
+            para_elements = paragraph.get('elements', [])
+            current_line_text = ""
+            
+            for pe in para_elements:
+                text_run = pe.get('textRun', {})
+                if text_run and 'content' in text_run:
+                    current_line_text += text_run['content']
+            
+            if current_line_text.strip():
+                processed_lines.append(current_line_text)
+                
+        elif 'table' in element:
+            # Handle table elements
+            table = element.get('table', {})
+            processed_lines.append("\n--- TABLE ---\n")
+            
+            table_rows = table.get('tableRows', [])
+            for row in table_rows:
+                row_cells = row.get('tableCells', [])
+                cell_texts = []
+                
+                for cell in row_cells:
+                    cell_content = cell.get('content', [])
+                    cell_text = "".join(process_structural_elements(cell_content))
+                    cell_texts.append(cell_text.strip())
+                
+                if any(cell_texts):  # Only add row if it has content
+                    processed_lines.append(" | ".join(cell_texts) + "\n")
+            
+            processed_lines.append("--- END TABLE ---\n")
+            
+        elif 'sectionBreak' in element:
+            # Handle section breaks
+            processed_lines.append("\n--- SECTION BREAK ---\n")
+            
+        elif 'tableOfContents' in element:
+            # Handle table of contents
+            processed_lines.append("\n--- TABLE OF CONTENTS ---\n")
+            
+        elif 'pageBreak' in element:
+            # Handle page breaks
+            processed_lines.append("\n--- PAGE BREAK ---\n")
+            
+        elif 'horizontalRule' in element:
+            # Handle horizontal rules
+            processed_lines.append("\n--- HORIZONTAL RULE ---\n")
+            
+        elif 'footerContent' in element:
+            # Handle footer content
+            processed_lines.append("\n--- FOOTER ---\n")
+            footer_content = element.get('footerContent', {}).get('content', [])
+            processed_lines.extend(process_structural_elements(footer_content))
+            processed_lines.append("--- END FOOTER ---\n")
+            
+        elif 'headerContent' in element:
+            # Handle header content
+            processed_lines.append("\n--- HEADER ---\n")
+            header_content = element.get('headerContent', {}).get('content', [])
+            processed_lines.extend(process_structural_elements(header_content))
+            processed_lines.append("--- END HEADER ---\n")
+            
+        # Add more element types as needed
+        # 'pageBreak', 'horizontalRule', etc.
+    
+    return processed_lines
 
 @server.tool()
 @require_google_service("drive", "drive_read")
@@ -56,12 +199,12 @@ async def search_docs(
         )
     return "\n".join(output)
 
-@server.tool()
+# @server.tool()
 @require_multiple_services([
     {"service_type": "drive", "scopes": "drive_read", "param_name": "drive_service"},
     {"service_type": "docs", "scopes": "docs_read", "param_name": "docs_service"}
 ])
-@handle_http_errors("get_doc_content")
+# @handle_http_errors("get_doc_content")
 async def get_doc_content(
     drive_service,
     docs_service,
@@ -96,22 +239,55 @@ async def get_doc_content(
     if mime_type == "application/vnd.google-apps.document":
         logger.info(f"[get_doc_content] Processing as native Google Doc.")
         doc_data = await asyncio.to_thread(
-            docs_service.documents().get(documentId=document_id).execute
+            docs_service.documents().get(
+                documentId=document_id,
+                includeTabsContent=True
+            ).execute
         )
-        body_elements = doc_data.get('body', {}).get('content', [])
-
+        logger.info(f"[get_doc_content] Processing as native Google Doc.")
+        
+        # Process tabs if they exist
+        tabs = doc_data.get('tabs', [])
+        logger.info(f"[get_doc_content] Found {len(tabs)} tabs")
+        
+        # Debug: Print full document structure
+        logger.info(f"[get_doc_content] Document keys: {list(doc_data.keys())}")
+        if tabs:
+            for i, tab in enumerate(tabs):
+                logger.info(f"[get_doc_content] Tab {i} keys: {list(tab.keys())}")
+                logger.info(f"[get_doc_content] Tab {i} properties: {tab.get('tabProperties', {})}")
+                
+                # Check for child tabs in all possible locations
+                child_tabs = tab.get('childTabs', [])
+                nested_tabs = tab.get('tabs', [])
+                document_tab = tab.get('documentTab', {})
+                
+                logger.info(f"[get_doc_content] Tab {i} has {len(child_tabs)} childTabs")
+                logger.info(f"[get_doc_content] Tab {i} has {len(nested_tabs)} nested tabs")
+                logger.info(f"[get_doc_content] Tab {i} documentTab keys: {list(document_tab.keys()) if document_tab else 'None'}")
+                
+                if document_tab:
+                    tab_body = document_tab.get('body', {})
+                    if tab_body:
+                        tab_content = tab_body.get('content', [])
+                        logger.info(f"[get_doc_content] Tab {i} body content elements: {len(tab_content)}")
+                        # Log first few elements to understand structure
+                        for j, element in enumerate(tab_content[:3]):
+                            logger.info(f"[get_doc_content] Tab {i} element {j}: {list(element.keys())}")
+                    else:
+                        logger.info(f"[get_doc_content] Tab {i} has no body")
+        
         processed_text_lines: List[str] = []
-        for element in body_elements:
-            if 'paragraph' in element:
-                paragraph = element.get('paragraph', {})
-                para_elements = paragraph.get('elements', [])
-                current_line_text = ""
-                for pe in para_elements:
-                    text_run = pe.get('textRun', {})
-                    if text_run and 'content' in text_run:
-                        current_line_text += text_run['content']
-                if current_line_text.strip():
-                        processed_text_lines.append(current_line_text)
+        
+        if tabs:
+            # Document has tabs - process all tabs recursively
+            logger.info(f"[get_doc_content] Processing {len(tabs)} tabs recursively")
+            processed_text_lines.extend(process_tabs_recursively(tabs, 0))
+        else:
+            # Document without tabs - process body content directly
+            body_elements = doc_data.get('body', {}).get('content', [])
+            processed_text_lines.extend(process_structural_elements(body_elements))
+            
         body_text = "".join(processed_text_lines)
     else:
         logger.info(f"[get_doc_content] Processing as Drive file (e.g., .docx, other). MimeType: {mime_type}")
@@ -154,6 +330,7 @@ async def get_doc_content(
         f'File: "{file_name}" (ID: {document_id}, Type: {mime_type})\n'
         f'Link: {web_view_link}\n\n--- CONTENT ---\n'
     )
+    print(body_text)
     return header + body_text
 
 @server.tool()
@@ -224,3 +401,6 @@ read_doc_comments = _comment_tools['read_comments']
 create_doc_comment = _comment_tools['create_comment']
 reply_to_comment = _comment_tools['reply_to_comment']
 resolve_comment = _comment_tools['resolve_comment']
+
+if __name__ == '__main__':
+    asyncio.run(get_doc_content(drive_service="drive", docs_service="docs", document_id="18-52JXU073R9wQ6ip-MrKMjHVq2QgR1VIEFXgMGyuI8"))
