@@ -199,12 +199,12 @@ async def search_docs(
         )
     return "\n".join(output)
 
-# @server.tool()
+@server.tool()
 @require_multiple_services([
     {"service_type": "drive", "scopes": "drive_read", "param_name": "drive_service"},
     {"service_type": "docs", "scopes": "docs_read", "param_name": "docs_service"}
 ])
-# @handle_http_errors("get_doc_content")
+@handle_http_errors("get_doc_content")
 async def get_doc_content(
     drive_service,
     docs_service,
