@@ -10,6 +10,7 @@ from typing import List, Optional, Dict, Any
 
 from mcp import types
 from googleapiclient.errors import HttpError
+from fastmcp import Context
 
 from auth.service_decorator import require_google_service
 from core.server import server
@@ -17,10 +18,11 @@ from core.server import server
 logger = logging.getLogger(__name__)
 
 
-@server.tool()
+@server.tool
 @require_google_service("tasks", "tasks_read")
 async def list_task_lists(
     service,
+    ctx: Context,
     user_google_email: Optional[str] = None,
     max_results: Optional[int] = None,
     page_token: Optional[str] = None
@@ -76,10 +78,11 @@ async def list_task_lists(
         raise Exception(message)
 
 
-@server.tool()
+@server.tool
 @require_google_service("tasks", "tasks_read")
 async def get_task_list(
     service,
+    ctx: Context,
     task_list_id: str,
     user_google_email: Optional[str] = None
 ) -> str:
@@ -119,10 +122,11 @@ async def get_task_list(
         raise Exception(message)
 
 
-@server.tool()
+@server.tool
 @require_google_service("tasks", "tasks")
 async def create_task_list(
     service,
+    ctx: Context,
     title: str,
     user_google_email: Optional[str] = None
 ) -> str:
@@ -166,10 +170,11 @@ async def create_task_list(
         raise Exception(message)
 
 
-@server.tool()
+@server.tool
 @require_google_service("tasks", "tasks")
 async def update_task_list(
     service,
+    ctx: Context,
     task_list_id: str,
     title: str,
     user_google_email: Optional[str] = None
@@ -215,10 +220,11 @@ async def update_task_list(
         raise Exception(message)
 
 
-@server.tool()
+@server.tool
 @require_google_service("tasks", "tasks")
 async def delete_task_list(
     service,
+    ctx: Context,
     task_list_id: str,
     user_google_email: Optional[str] = None
 ) -> str:
@@ -254,10 +260,11 @@ async def delete_task_list(
         raise Exception(message)
 
 
-@server.tool()
+@server.tool
 @require_google_service("tasks", "tasks_read")
 async def list_tasks(
     service,
+    ctx: Context,
     task_list_id: str,
     user_google_email: Optional[str] = None,
     max_results: Optional[int] = None,
@@ -359,10 +366,11 @@ async def list_tasks(
         raise Exception(message)
 
 
-@server.tool()
+@server.tool
 @require_google_service("tasks", "tasks_read")
 async def get_task(
     service,
+    ctx: Context,
     task_list_id: str,
     task_id: str,
     user_google_email: Optional[str] = None
@@ -419,10 +427,11 @@ async def get_task(
         raise Exception(message)
 
 
-@server.tool()
+@server.tool
 @require_google_service("tasks", "tasks")
 async def create_task(
     service,
+    ctx: Context,
     task_list_id: str,
     title: str,
     user_google_email: Optional[str] = None,
@@ -493,10 +502,11 @@ async def create_task(
         raise Exception(message)
 
 
-@server.tool()
+@server.tool
 @require_google_service("tasks", "tasks")
 async def update_task(
     service,
+    ctx: Context,
     task_list_id: str,
     task_id: str,
     user_google_email: Optional[str] = None,
@@ -574,10 +584,11 @@ async def update_task(
         raise Exception(message)
 
 
-@server.tool()
+@server.tool
 @require_google_service("tasks", "tasks")
 async def delete_task(
     service,
+    ctx: Context,
     task_list_id: str,
     task_id: str,
     user_google_email: Optional[str] = None
@@ -615,10 +626,11 @@ async def delete_task(
         raise Exception(message)
 
 
-@server.tool()
+@server.tool
 @require_google_service("tasks", "tasks")
 async def move_task(
     service,
+    ctx: Context,
     task_list_id: str,
     task_id: str,
     user_google_email: Optional[str] = None,
@@ -693,10 +705,11 @@ async def move_task(
         raise Exception(message)
 
 
-@server.tool()
+@server.tool
 @require_google_service("tasks", "tasks")
 async def clear_completed_tasks(
     service,
+    ctx: Context,
     task_list_id: str,
     user_google_email: Optional[str] = None
 ) -> str:

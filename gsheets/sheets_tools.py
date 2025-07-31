@@ -15,16 +15,18 @@ from auth.service_decorator import require_google_service
 from core.server import server
 from core.utils import handle_http_errors
 from core.comments import create_comment_tools
+from fastmcp import Context
 
 # Configure module logger
 logger = logging.getLogger(__name__)
 
 
-@server.tool()
+@server.tool
 @require_google_service("drive", "drive_read")
 @handle_http_errors("list_spreadsheets")
 async def list_spreadsheets(
     service,
+    ctx: Context,
     user_google_email: Optional[str] = None,
     max_results: int = 25,
 ) -> str:
@@ -69,11 +71,12 @@ async def list_spreadsheets(
     return text_output
 
 
-@server.tool()
+@server.tool
 @require_google_service("sheets", "sheets_read")
 @handle_http_errors("get_spreadsheet_info")
 async def get_spreadsheet_info(
     service,
+    ctx: Context,
     spreadsheet_id: str,
     user_google_email: Optional[str] = None,
 ) -> str:
@@ -119,11 +122,12 @@ async def get_spreadsheet_info(
     return text_output
 
 
-@server.tool()
+@server.tool
 @require_google_service("sheets", "sheets_read")
 @handle_http_errors("read_sheet_values")
 async def read_sheet_values(
     service,
+    ctx: Context,
     spreadsheet_id: str,
     user_google_email: Optional[str] = None,
     range_name: str = "A1:Z1000",
@@ -169,11 +173,12 @@ async def read_sheet_values(
     return text_output
 
 
-@server.tool()
+@server.tool
 @require_google_service("sheets", "sheets_write")
 @handle_http_errors("modify_sheet_values")
 async def modify_sheet_values(
     service,
+    ctx: Context,
     spreadsheet_id: str,
     range_name: str,
     user_google_email: Optional[str] = None,
@@ -240,11 +245,12 @@ async def modify_sheet_values(
     return text_output
 
 
-@server.tool()
+@server.tool
 @require_google_service("sheets", "sheets_write")
 @handle_http_errors("create_spreadsheet")
 async def create_spreadsheet(
     service,
+    ctx: Context,
     title: str,
     user_google_email: Optional[str] = None,
     sheet_names: Optional[List[str]] = None,
@@ -289,11 +295,12 @@ async def create_spreadsheet(
     return text_output
 
 
-@server.tool()
+@server.tool
 @require_google_service("sheets", "sheets_write")
 @handle_http_errors("create_sheet")
 async def create_sheet(
     service,
+    ctx: Context,
     spreadsheet_id: str,
     sheet_name: str,
     user_google_email: Optional[str] = None,

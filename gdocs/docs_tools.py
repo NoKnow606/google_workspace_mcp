@@ -10,6 +10,7 @@ from typing import List, Optional
 from uuid import uuid4
 
 from mcp import types
+from fastmcp import Context
 from googleapiclient.http import MediaIoBaseDownload
 
 # Auth & server utilities
@@ -162,11 +163,12 @@ def process_structural_elements(elements: List) -> List[str]:
     
     return processed_lines
 
-@server.tool()
+@server.tool
 @require_google_service("drive", "drive_read")
 @handle_http_errors("search_docs")
 async def search_docs(
     service,
+    ctx: Context,
     query: str,
     page_size: int = 10,
     user_google_email: Optional[str] = None,
@@ -199,7 +201,7 @@ async def search_docs(
         )
     return "\n".join(output)
 
-@server.tool()
+@server.tool
 @require_multiple_services([
     {"service_type": "drive", "scopes": "drive_read", "param_name": "drive_service"},
     {"service_type": "docs", "scopes": "docs_read", "param_name": "docs_service"}
@@ -208,6 +210,7 @@ async def search_docs(
 async def get_doc_content(
     drive_service,
     docs_service,
+    ctx: Context,
     document_id: str,
     user_google_email: Optional[str] = None,
 ) -> str:
@@ -333,11 +336,12 @@ async def get_doc_content(
     print(body_text)
     return header + body_text
 
-@server.tool()
+@server.tool
 @require_google_service("drive", "drive_read")
 @handle_http_errors("list_docs_in_folder")
 async def list_docs_in_folder(
     service,
+    ctx: Context,
     user_google_email: Optional[str] = None,
     folder_id: str = 'root',
     page_size: int = 100
@@ -365,11 +369,12 @@ async def list_docs_in_folder(
         out.append(f"- {f['name']} (ID: {f['id']}) Modified: {f.get('modifiedTime')} Link: {f.get('webViewLink')}")
     return "\n".join(out)
 
-@server.tool()
+@server.tool
 @require_google_service("docs", "docs_write")
 @handle_http_errors("create_doc")
 async def create_doc(
     service,
+    ctx: Context,
     title: str,
     user_google_email: Optional[str] = None,
     content: str = '',

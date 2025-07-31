@@ -13,6 +13,7 @@ from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 import io
 import httpx
+from fastmcp import Context
 
 from auth.service_decorator import require_google_service
 from core.utils import extract_office_xml_text, handle_http_errors
@@ -75,11 +76,12 @@ def _build_drive_list_params(
 
     return list_params
 
-@server.tool()
+@server.tool
 @require_google_service("drive", "drive_read")
 @handle_http_errors("search_drive_files")
 async def search_drive_files(
     service,
+    ctx: Context,
     query: str,
     user_google_email: Optional[str] = None,
     page_size: int = 10,
@@ -142,11 +144,12 @@ async def search_drive_files(
     text_output = "\n".join(formatted_files_text_parts)
     return text_output
 
-@server.tool()
+@server.tool
 @require_google_service("drive", "drive_read")
 @handle_http_errors("get_drive_file_content")
 async def get_drive_file_content(
     service,
+    ctx: Context,
     file_id: str,
     user_google_email: Optional[str] = None,
 ) -> str:
@@ -232,11 +235,12 @@ async def get_drive_file_content(
     return header + body_text
 
 
-@server.tool()
+@server.tool
 @require_google_service("drive", "drive_read")
 @handle_http_errors("list_drive_items")
 async def list_drive_items(
     service,
+    ctx: Context,
     user_google_email: Optional[str] = None,
     folder_id: str = 'root',
     page_size: int = 100,
@@ -288,11 +292,12 @@ async def list_drive_items(
     text_output = "\n".join(formatted_items_text_parts)
     return text_output
 
-@server.tool()
+@server.tool
 @require_google_service("drive", "drive_file")
 @handle_http_errors("create_drive_file")
 async def create_drive_file(
     service,
+    ctx: Context,
     file_name: str,
     user_google_email: Optional[str] = None,
     content: Optional[str] = None,  # Now explicitly Optional

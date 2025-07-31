@@ -12,6 +12,7 @@ from typing import Optional, List, Dict, Literal
 from email.mime.text import MIMEText
 
 from mcp import types
+from fastmcp import Context
 from fastapi import Body
 
 from auth.service_decorator import require_google_service
@@ -130,7 +131,7 @@ def _format_gmail_results_plain(messages: list, query: str) -> str:
     return "\n".join(lines)
 
 
-@server.tool()
+@server.tool
 @require_google_service("gmail", "gmail_read")
 @handle_http_errors("search_gmail_messages")
 async def search_gmail_messages(
@@ -170,7 +171,7 @@ async def search_gmail_messages(
     return formatted_output
 
 
-@server.tool()
+@server.tool
 @require_google_service("gmail", "gmail_read")
 @handle_http_errors("get_gmail_message_content")
 async def get_gmail_message_content(
@@ -238,7 +239,7 @@ async def get_gmail_message_content(
     return content_text
 
 
-@server.tool()
+@server.tool
 @require_google_service("gmail", "gmail_read")
 @handle_http_errors("get_gmail_messages_content_batch")
 async def get_gmail_messages_content_batch(
@@ -391,12 +392,13 @@ async def get_gmail_messages_content_batch(
     return final_output
 
 
-@server.tool()
+
+@server.tool
 @require_google_service("gmail", GMAIL_SEND_SCOPE)
 @handle_http_errors("send_gmail_message")
 async def send_gmail_message(
     service,
-    user_google_email: Optional[str] = None,
+    ctx: Context,
     to: str = Body(..., description="Recipient email address."),
     subject: str = Body(..., description="Email subject."),
     body: str = Body(..., description="Email body (plain text)."),
@@ -408,7 +410,6 @@ async def send_gmail_message(
         to (str): Recipient email address.
         subject (str): Email subject.
         body (str): Email body (plain text).
-        user_google_email (Optional[str]): The user's Google email address. Optional.
 
     Returns:
         str: Confirmation message with the sent email's message ID.
@@ -420,22 +421,24 @@ async def send_gmail_message(
     raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
     send_body = {"raw": raw_message}
 
-    # Send the message
+    # Send the email
     sent_message = await asyncio.to_thread(
         service.users().messages().send(userId="me", body=send_body).execute
     )
     message_id = sent_message.get("id")
-    return f"Email sent! Message ID: {message_id}"
+
+    return f"Email sent successfully! Message ID: {message_id}"
 
 
-@server.tool()
+@server.tool
 @require_google_service("gmail", GMAIL_COMPOSE_SCOPE)
 @handle_http_errors("draft_gmail_message")
 async def draft_gmail_message(
     service,
-    user_google_email: Optional[str] = None,
+    ctx: Context,
     subject: str = Body(..., description="Email subject."),
     body: str = Body(..., description="Email body (plain text)."),
+    user_google_email: Optional[str] = None,
     to: Optional[str] = Body(None, description="Optional recipient email address."),
 ) -> str:
     """
@@ -475,11 +478,11 @@ async def draft_gmail_message(
     return f"Draft created! Draft ID: {draft_id}"
 
 
-@server.tool()
+@server.tool
 @require_google_service("gmail", "gmail_read")
 @handle_http_errors("get_gmail_thread_content")
 async def get_gmail_thread_content(
-    service, thread_id: str, user_google_email: Optional[str] = None
+    service, ctx: Context, thread_id: str, user_google_email: Optional[str] = None
 ) -> str:
     """
     Retrieves the complete content of a Gmail conversation thread, including all messages.
@@ -564,10 +567,10 @@ async def get_gmail_thread_content(
     return content_text
 
 
-@server.tool()
+@server.tool
 @require_google_service("gmail", "gmail_read")
 @handle_http_errors("list_gmail_labels")
-async def list_gmail_labels(service, user_google_email: Optional[str] = None) -> str:
+async def list_gmail_labels(service, ctx: Context, user_google_email: Optional[str] = None) -> str:
     """
     Lists all labels in the user's Gmail account.
 
@@ -612,15 +615,16 @@ async def list_gmail_labels(service, user_google_email: Optional[str] = None) ->
     return "\n".join(lines)
 
 
-@server.tool()
+@server.tool
 @require_google_service("gmail", GMAIL_LABELS_SCOPE)
 @handle_http_errors("manage_gmail_label")
 async def manage_gmail_label(
     service,
+    ctx: Context,
     action: Literal["create", "update", "delete"],
-    user_google_email: Optional[str] = None,
     name: Optional[str] = None,
     label_id: Optional[str] = None,
+    user_google_email: Optional[str] = None,
     label_list_visibility: Literal["labelShow", "labelHide"] = "labelShow",
     message_list_visibility: Literal["show", "hide"] = "show",
 ) -> str:
@@ -686,15 +690,16 @@ async def manage_gmail_label(
         return f"Label '{label_name}' (ID: {label_id}) deleted successfully!"
 
 
-@server.tool()
+@server.tool
 @require_google_service("gmail", GMAIL_MODIFY_SCOPE)
 @handle_http_errors("modify_gmail_message_labels")
 async def modify_gmail_message_labels(
     service,
+    ctx: Context,
     message_id: str,
-    user_google_email: Optional[str] = None,
     add_label_ids: Optional[List[str]] = None,
     remove_label_ids: Optional[List[str]] = None,
+    user_google_email: Optional[str] = None,
 ) -> str:
     """
     Adds or removes labels from a Gmail message.

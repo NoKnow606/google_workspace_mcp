@@ -9,6 +9,7 @@ from typing import Optional
 
 from mcp import types
 from googleapiclient.errors import HttpError
+from fastmcp import Context
 
 # Auth & server utilities
 from auth.service_decorator import require_google_service
@@ -17,11 +18,12 @@ from core.utils import handle_http_errors
 
 logger = logging.getLogger(__name__)
 
-@server.tool()
+@server.tool
 @require_google_service("chat", "chat_read")
 @handle_http_errors("list_spaces")
 async def list_spaces(
     service,
+    ctx: Context,
     user_google_email: Optional[str] = None,
     page_size: int = 100,
     space_type: str = "all"  # "all", "room", "dm"
@@ -62,11 +64,12 @@ async def list_spaces(
 
     return "\n".join(output)
 
-@server.tool()
+@server.tool
 @require_google_service("chat", "chat_read")
 @handle_http_errors("get_messages")
 async def get_messages(
     service,
+    ctx: Context,
     space_id: str,
     page_size: int = 50,
     order_by: str = "createTime desc",
@@ -112,11 +115,12 @@ async def get_messages(
 
     return "\n".join(output)
 
-@server.tool()
+@server.tool
 @require_google_service("chat", "chat_write")
 @handle_http_errors("send_message")
 async def send_message(
     service,
+    ctx: Context,
     space_id: str,
     message_text: str,
     user_google_email: Optional[str] = None,
@@ -153,11 +157,12 @@ async def send_message(
     logger.info(f"Successfully sent message to space '{space_id}' by {user_google_email}")
     return msg
 
-@server.tool()
+@server.tool
 @require_google_service("chat", "chat_read")
 @handle_http_errors("search_messages")
 async def search_messages(
     service,
+    ctx: Context,
     query: str,
     user_google_email: Optional[str] = None,
     space_id: Optional[str] = None,

@@ -4,6 +4,7 @@ from functools import wraps
 from typing import Dict, List, Optional, Any, Callable, Union
 from datetime import datetime, timedelta
 
+from fastmcp import Context
 from google.auth.exceptions import RefreshError
 from auth.google_auth import get_authenticated_google_service, GoogleAuthenticationError
 
@@ -181,7 +182,7 @@ def require_google_service(
     service_type: str,
     scopes: Union[str, List[str]],
     version: Optional[str] = None,
-    cache_enabled: bool = True
+    cache_enabled: bool = True,
 ):
     """
     Decorator that automatically handles Google service authentication and injection.
@@ -222,19 +223,33 @@ def require_google_service(
             # Extract user_google_email from the arguments passed to the wrapper
             bound_args = wrapper_sig.bind(*args, **kwargs)
             bound_args.apply_defaults()
-            user_google_email = bound_args.arguments.get('user_google_email')
+            # user_google_email = bound_args.arguments.get('user_google_email')
+            ctx = bound_args.arguments.get('ctx')
+            
+            # Extract OAuth credentials from headers if available
+            client_id = None
+            client_secret = None
+            refresh_token = None
 
-            if not user_google_email:
-                # Try to auto-detect user email from environment variables
-                try:
-                    from auth.google_auth import get_default_user_email_from_env
-                    user_google_email = get_default_user_email_from_env()
-                    logger.info(f"Auto-detected user email: {user_google_email}")
-                except Exception as e:
-                    logger.warning(f"Failed to auto-detect user email: {e}")
+            if ctx and hasattr(ctx, 'request_context') and ctx.request_context:
+                headers_raw = ctx.request_context.request.get("headers", {})
                 
-                if not user_google_email:
-                    raise Exception("'user_google_email' parameter is required but was not found, and auto-detection failed. Please provide user_google_email parameter or ensure environment variables are set correctly.")
+                # Convert headers from list of tuples to dictionary
+                if isinstance(headers_raw, list):
+                    headers = {key.decode() if isinstance(key, bytes) else key: 
+                             value.decode() if isinstance(value, bytes) else value 
+                             for key, value in headers_raw}
+                else:
+                    headers = headers_raw
+                
+                client_id = headers.get("google_oauth_client_id")
+                client_secret = headers.get("google_oauth_client_secret")
+                refresh_token = headers.get("google_oauth_refresh_token")
+                
+                if client_id and client_secret and refresh_token:
+                    logger.info(f"[{func.__name__}] Found OAuth credentials in headers for user: {refresh_token}")
+                else:
+                    logger.debug(f"[{func.__name__}] No complete OAuth credentials found in headers")
 
             # Get service configuration from the decorator's arguments
             if service_type not in SERVICE_CONFIGS:
@@ -249,13 +264,13 @@ def require_google_service(
 
             # --- Service Caching and Authentication Logic (largely unchanged) ---
             service = None
-            actual_user_email = user_google_email
-
-            if cache_enabled:
-                cache_key = _get_cache_key(user_google_email, service_name, service_version, resolved_scopes)
-                cached_result = _get_cached_service(cache_key)
-                if cached_result:
-                    service, actual_user_email = cached_result
+            # actual_user_email = user_google_email
+            #
+            # if cache_enabled:
+            #     cache_key = _get_cache_key(user_google_email, service_name, service_version, resolved_scopes)
+            #     cached_result = _get_cached_service(cache_key)
+            #     if cached_result:
+            #         service, actual_user_email = cached_result
 
             if service is None:
                 try:
@@ -264,12 +279,14 @@ def require_google_service(
                         service_name=service_name,
                         version=service_version,
                         tool_name=tool_name,
-                        user_google_email=user_google_email,
                         required_scopes=resolved_scopes,
+                        client_id=client_id,
+                        client_secret=client_secret,
+                        refresh_token=refresh_token,
                     )
-                    if cache_enabled:
-                        cache_key = _get_cache_key(user_google_email, service_name, service_version, resolved_scopes)
-                        _cache_service(cache_key, service, actual_user_email)
+                    # if cache_enabled:
+                    #     cache_key = _get_cache_key(user_google_email, service_name, service_version, resolved_scopes)
+                    #     _cache_service(cache_key, service, actual_user_email)
                 except GoogleAuthenticationError as e:
                     raise Exception(str(e))
 
@@ -278,8 +295,8 @@ def require_google_service(
                 # Prepend the fetched service object to the original arguments
                 return await func(service, *args, **kwargs)
             except RefreshError as e:
-                error_message = _handle_token_refresh_error(e, actual_user_email, service_name)
-                raise Exception(error_message)
+                # error_message = _handle_token_refresh_error(e, service_name)
+                raise Exception(f"refresh error") from e
 
         # Set the wrapper's signature to the one without 'service'
         wrapper.__signature__ = wrapper_sig
@@ -307,25 +324,62 @@ def require_multiple_services(service_configs: List[Dict[str, Any]]):
             # Both services are automatically injected
     """
     def decorator(func: Callable) -> Callable:
+        original_sig = inspect.signature(func)
+        params = list(original_sig.parameters.values())
+
+        wrapper_sig = original_sig.replace(parameters=params)
+
         @wraps(func)
         async def wrapper(*args, **kwargs):
             # Extract user_google_email
             sig = inspect.signature(func)
             param_names = list(sig.parameters.keys())
+            logger.info(f"[{func.__name__}] {param_names}")
 
-            user_google_email = None
 
-            try:
-                from auth.google_auth import get_default_user_email_from_env
-                user_google_email = get_default_user_email_from_env()
-                logger.info(f"Auto-detected user email: {user_google_email}")
-            except Exception as e:
-                logger.warning(f"Failed to auto-detect user email: {e}")
+            bound_args = wrapper_sig.bind(*args, **kwargs)
+            bound_args.apply_defaults()
+            # user_google_email = bound_args.arguments.get('user_google_email')
+            ctx = bound_args.arguments.get('ctx')
 
-            if not user_google_email:
-                raise Exception("user_google_email parameter is required but not found")
+            # user_google_email = None
+            #
+            # try:
+            #     from auth.google_auth import get_default_user_email_from_env
+            #     user_google_email = get_default_user_email_from_env()
+            #     logger.info(f"Auto-detected user email: {user_google_email}")
+            # except Exception as e:
+            #     logger.warning(f"Failed to auto-detect user email: {e}")
+            #
+            # if not user_google_email:
+            #     raise Exception("user_google_email parameter is required but not found")
 
             # Authenticate all services
+
+            client_id = None
+            client_secret = None
+            refresh_token = None
+
+            if ctx and hasattr(ctx, 'request_context') and ctx.request_context:
+                headers_raw = ctx.request_context.request.get("headers", {})
+                
+                # Convert headers from list of tuples to dictionary
+                if isinstance(headers_raw, list):
+                    headers = {key.decode() if isinstance(key, bytes) else key: 
+                             value.decode() if isinstance(value, bytes) else value 
+                             for key, value in headers_raw}
+                else:
+                    headers = headers_raw
+                
+                client_id = headers.get("google_oauth_client_id")
+                client_secret = headers.get("google_oauth_client_secret")
+                refresh_token = headers.get("google_oauth_refresh_token")
+
+                if client_id and client_secret and refresh_token:
+                    logger.info(f"[{func.__name__}] Found OAuth credentials in headers for user: {refresh_token}")
+                else:
+                    logger.debug(f"[{func.__name__}] No complete OAuth credentials found in headers")
+
             for config in service_configs:
                 service_type = config["service_type"]
                 scopes = config["scopes"]
@@ -346,8 +400,10 @@ def require_multiple_services(service_configs: List[Dict[str, Any]]):
                         service_name=service_name,
                         version=service_version,
                         tool_name=tool_name,
-                        user_google_email=user_google_email,
                         required_scopes=resolved_scopes,
+                        client_id=client_id,
+                        client_secret=client_secret,
+                        refresh_token=refresh_token,
                     )
 
                     # Inject service with specified parameter name
@@ -361,8 +417,8 @@ def require_multiple_services(service_configs: List[Dict[str, Any]]):
                 return await func(*args, **kwargs)
             except RefreshError as e:
                 # Handle token refresh errors gracefully
-                error_message = _handle_token_refresh_error(e, user_google_email, "Multiple Services")
-                raise Exception(error_message)
+                # error_message = _handle_token_refresh_error(e, user_google_email, "Multiple Services")
+                raise Exception(str(e))
 
         return wrapper
     return decorator

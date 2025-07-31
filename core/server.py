@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Optional
+from typing import Optional, Dict
 from importlib import metadata
 
 from fastapi import Header
@@ -8,7 +8,8 @@ from fastapi.responses import HTMLResponse
 
 from mcp import types
 
-from mcp.server.fastmcp import FastMCP
+# from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 from starlette.requests import Request
 
 from auth.google_auth import handle_auth_callback, start_auth_flow, check_client_secrets
@@ -69,7 +70,6 @@ _current_transport_mode = "stdio"  # Default to stdio
 # Basic MCP server instance
 server = FastMCP(
     name="google_workspace",
-    server_url=f"{WORKSPACE_MCP_BASE_URI}:{WORKSPACE_MCP_PORT}/mcp",
     port=WORKSPACE_MCP_PORT,
     host="0.0.0.0"
 )
@@ -157,7 +157,8 @@ async def oauth2_callback(request: Request) -> HTMLResponse:
         # Generic error page for any other issues during token exchange or credential saving
         return create_server_error_response(str(e))
 
-@server.tool()
+
+@server.tool
 async def start_google_auth(
     service_name: str,
     user_google_email: str = USER_GOOGLE_EMAIL,

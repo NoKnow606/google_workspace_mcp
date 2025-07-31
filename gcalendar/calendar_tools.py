@@ -11,6 +11,7 @@ import re
 from typing import List, Optional, Dict, Any
 
 from mcp import types
+from fastmcp import Context
 from googleapiclient.errors import HttpError
 from googleapiclient.discovery import build
 
@@ -79,10 +80,10 @@ def _correct_time_format_for_api(
     return time_str
 
 
-@server.tool()
+@server.tool
 @require_google_service("calendar", "calendar_read")
 @handle_http_errors("list_calendars")
-async def list_calendars(service, user_google_email: Optional[str] = None) -> str:
+async def list_calendars(service, ctx: Context, user_google_email: Optional[str] = None) -> str:
     """
     Retrieves a list of calendars accessible to the authenticated user.
 
@@ -113,11 +114,12 @@ async def list_calendars(service, user_google_email: Optional[str] = None) -> st
     return text_output
 
 
-@server.tool()
+@server.tool
 @require_google_service("calendar", "calendar_read")
 @handle_http_errors("get_events")
 async def get_events(
     service,
+    ctx: Context,
     user_google_email: Optional[str] = None,
     calendar_id: str = "primary",
     time_min: Optional[str] = None,
@@ -201,11 +203,12 @@ async def get_events(
     return text_output
 
 
-@server.tool()
+@server.tool
 @require_google_service("calendar", "calendar_events")
 @handle_http_errors("create_event")
 async def create_event(
     service,
+    ctx: Context,
     summary: str,
     start_time: str,
     end_time: str,
@@ -325,11 +328,12 @@ async def create_event(
     return confirmation_message
 
 
-@server.tool()
+@server.tool
 @require_google_service("calendar", "calendar_events")
 @handle_http_errors("modify_event")
 async def modify_event(
     service,
+    ctx: Context,
     event_id: str,
     user_google_email: Optional[str] = None,
     calendar_id: str = "primary",
@@ -445,10 +449,10 @@ async def modify_event(
     return confirmation_message
 
 
-@server.tool()
+@server.tool
 @require_google_service("calendar", "calendar_events")
 @handle_http_errors("delete_event")
-async def delete_event(service, event_id: str, user_google_email: Optional[str] = None, calendar_id: str = "primary") -> str:
+async def delete_event(service,ctx: Context, event_id: str, user_google_email: Optional[str] = None, calendar_id: str = "primary") -> str:
     """
     Deletes an existing event.
 
@@ -499,11 +503,12 @@ async def delete_event(service, event_id: str, user_google_email: Optional[str] 
     return confirmation_message
 
 
-@server.tool()
+@server.tool
 @require_google_service("calendar", "calendar_read")
 @handle_http_errors("get_event")
 async def get_event(
     service,
+    ctx: Context,
     event_id: str,
     user_google_email: Optional[str] = None,
     calendar_id: str = "primary"

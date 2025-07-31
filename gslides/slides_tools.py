@@ -9,6 +9,7 @@ import asyncio
 from typing import List, Optional, Dict, Any
 
 from mcp import types
+from fastmcp import Context
 from googleapiclient.errors import HttpError
 
 from auth.service_decorator import require_google_service
@@ -19,11 +20,12 @@ from core.comments import create_comment_tools
 logger = logging.getLogger(__name__)
 
 
-@server.tool()
+@server.tool
 @require_google_service("slides", "slides")
 @handle_http_errors("create_presentation")
 async def create_presentation(
     service,
+    ctx: Context,
     user_google_email: Optional[str] = None,
     title: str = "Untitled Presentation"
 ) -> str:
@@ -60,11 +62,12 @@ async def create_presentation(
     return confirmation_message
 
 
-@server.tool()
+@server.tool
 @require_google_service("slides", "slides_read")
 @handle_http_errors("get_presentation")
 async def get_presentation(
     service,
+    ctx: Context,
     presentation_id: str,
     user_google_email: Optional[str] = None
 ) -> str:
@@ -108,11 +111,12 @@ Slides Breakdown:
     return confirmation_message
 
 
-@server.tool()
+@server.tool
 @require_google_service("slides", "slides")
 @handle_http_errors("batch_update_presentation")
 async def batch_update_presentation(
     service,
+    ctx: Context,
     presentation_id: str,
     requests: List[Dict[str, Any]],
     user_google_email: Optional[str] = None
@@ -165,11 +169,12 @@ async def batch_update_presentation(
     return confirmation_message
 
 
-@server.tool()
+@server.tool
 @require_google_service("slides", "slides_read")
 @handle_http_errors("get_page")
 async def get_page(
     service,
+    ctx: Context,
     presentation_id: str,
     page_object_id: str,
     user_google_email: Optional[str] = None
@@ -227,11 +232,12 @@ Page Elements:
     return confirmation_message
 
 
-@server.tool()
+@server.tool
 @require_google_service("slides", "slides_read")
 @handle_http_errors("get_page_thumbnail")
 async def get_page_thumbnail(
     service,
+    ctx: Context,
     presentation_id: str,
     page_object_id: str,
     user_google_email: Optional[str] = None,

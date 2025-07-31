@@ -9,6 +9,7 @@ import asyncio
 from typing import Optional, Dict, Any
 
 from mcp import types
+from fastmcp import Context
 
 from auth.service_decorator import require_google_service
 from core.server import server
@@ -17,11 +18,12 @@ from core.utils import handle_http_errors
 logger = logging.getLogger(__name__)
 
 
-@server.tool()
+@server.tool
 @require_google_service("forms", "forms")
 @handle_http_errors("create_form")
 async def create_form(
     service,
+    ctx: Context,
     title: str,
     user_google_email: Optional[str] = None,
     description: Optional[str] = None,
@@ -66,11 +68,12 @@ async def create_form(
     return confirmation_message
 
 
-@server.tool()
+@server.tool
 @require_google_service("forms", "forms")
 @handle_http_errors("get_form")
 async def get_form(
     service,
+    ctx: Context,
     form_id: str,
     user_google_email: Optional[str] = None
 ) -> str:
@@ -122,11 +125,12 @@ async def get_form(
     return result
 
 
-@server.tool()
+@server.tool
 @require_google_service("forms", "forms")
 @handle_http_errors("set_publish_settings")
 async def set_publish_settings(
     service,
+    ctx: Context,
     form_id: str,
     user_google_email: Optional[str] = None,
     publish_as_template: bool = False,
@@ -160,11 +164,12 @@ async def set_publish_settings(
     return confirmation_message
 
 
-@server.tool()
+@server.tool
 @require_google_service("forms", "forms")
 @handle_http_errors("get_form_response")
 async def get_form_response(
     service,
+    ctx: Context,
     form_id: str,
     response_id: str,
     user_google_email: Optional[str] = None
@@ -214,11 +219,12 @@ async def get_form_response(
     return result
 
 
-@server.tool()
+@server.tool
 @require_google_service("forms", "forms")
 @handle_http_errors("list_form_responses")
 async def list_form_responses(
     service,
+    ctx: Context,
     form_id: str,
     user_google_email: Optional[str] = None,
     page_size: int = 10,
