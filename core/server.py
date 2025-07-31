@@ -60,7 +60,7 @@ from auth.scopes import (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-WORKSPACE_MCP_PORT = int(os.getenv("PORT", os.getenv("WORKSPACE_MCP_PORT", 8000)))
+WORKSPACE_MCP_PORT = int(os.getenv("PORT", os.getenv("WORKSPACE_MCP_PORT", 3333)))
 WORKSPACE_MCP_BASE_URI = os.getenv("WORKSPACE_MCP_BASE_URI", "http://localhost")
 USER_GOOGLE_EMAIL = os.getenv("USER_GOOGLE_EMAIL", None)
 
