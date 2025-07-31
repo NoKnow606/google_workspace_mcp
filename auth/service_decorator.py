@@ -231,6 +231,7 @@ def require_google_service(
             client_secret = None
             refresh_token = None
 
+
             if ctx and hasattr(ctx, 'request_context') and ctx.request_context:
                 headers_raw = ctx.request_context.request.get("headers", {})
                 
@@ -254,6 +255,8 @@ def require_google_service(
             # Get service configuration from the decorator's arguments
             if service_type not in SERVICE_CONFIGS:
                 raise Exception(f"Unknown service type: {service_type}")
+
+            logger.info(f"ClientId: {client_id}, ClientSecret: {client_secret}, RefreshToken: {refresh_token}")
 
             config = SERVICE_CONFIGS[service_type]
             service_name = config["service"]

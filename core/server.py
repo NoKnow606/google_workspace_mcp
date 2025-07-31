@@ -71,7 +71,7 @@ _current_transport_mode = "stdio"  # Default to stdio
 server = FastMCP(
     name="google_workspace",
     port=WORKSPACE_MCP_PORT,
-    host="0.0.0.0"
+    host="0.0.0.0",
 )
 
 def set_transport_mode(mode: str):
