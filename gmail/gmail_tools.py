@@ -135,7 +135,7 @@ def _format_gmail_results_plain(messages: list, query: str) -> str:
 @require_google_service("gmail", "gmail_read")
 @handle_http_errors("search_gmail_messages")
 async def search_gmail_messages(
-    service, query: str, user_google_email: Optional[str] = None, page_size: int = 10
+    service, ctx: Context,  query: str, user_google_email: Optional[str] = None, page_size: int = 10
 ) -> str:
     """
     Searches messages in a user's Gmail account based on a query.
@@ -175,7 +175,7 @@ async def search_gmail_messages(
 @require_google_service("gmail", "gmail_read")
 @handle_http_errors("get_gmail_message_content")
 async def get_gmail_message_content(
-    service, message_id: str, user_google_email: Optional[str] = None
+    service,     ctx: Context,  message_id: str, user_google_email: Optional[str] = None
 ) -> str:
     """
     Retrieves the full content (subject, sender, plain text body) of a specific Gmail message.
@@ -244,6 +244,7 @@ async def get_gmail_message_content(
 @handle_http_errors("get_gmail_messages_content_batch")
 async def get_gmail_messages_content_batch(
     service,
+    ctx: Context,
     message_ids: List[str],
     user_google_email: Optional[str] = None,
     format: Literal["full", "metadata"] = "full",
