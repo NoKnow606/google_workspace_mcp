@@ -149,12 +149,6 @@ async def search_gmail_messages(
     Returns:
         str: LLM-friendly structured results with Message IDs, Thread IDs, and clickable Gmail web interface URLs for each found message.
     """
-    # Auto-detect user email if not provided
-    if not user_google_email:
-        from auth.google_auth import get_default_user_email_from_env
-        user_google_email = get_default_user_email_from_env()
-        if not user_google_email:
-            raise ValueError("Could not determine user email. Please provide user_google_email parameter or ensure environment variables are set correctly.")
     
     logger.info(f"[search_gmail_messages] Email: '{user_google_email}', Query: '{query}'")
 
