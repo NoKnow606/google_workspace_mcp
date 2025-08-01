@@ -208,9 +208,9 @@ async def search_docs(
 ])
 @handle_http_errors("get_doc_content")
 async def get_doc_content(
-    drive_service,
-    docs_service,
     ctx: Context,
+    drive_service: str,
+    docs_service: str,
     document_id: str,
     user_google_email: Optional[str] = None,
 ) -> str:
