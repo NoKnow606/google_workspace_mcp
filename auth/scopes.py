@@ -1,3 +1,4 @@
+import os
 """
 Google Workspace OAuth Scopes
 
@@ -113,5 +114,39 @@ TASKS_SCOPES = [
     TASKS_READONLY_SCOPE
 ]
 
-# Combined scopes for all supported Google Workspace operations
-SCOPES = list(set(BASE_SCOPES + CALENDAR_SCOPES + DRIVE_SCOPES + GMAIL_SCOPES + DOCS_SCOPES + CHAT_SCOPES + SHEETS_SCOPES + FORMS_SCOPES + SLIDES_SCOPES + TASKS_SCOPES))
+# 通过环境变量选择 scopes
+server_name = os.getenv("SERVER_NAME", "google_gmail").split('_')[1]
+
+# 根据服务名称选择对应的 scopes
+def get_scopes_for_service(service_name: str) -> list:
+    """根据服务名称返回对应的 scopes"""
+    base_scopes = BASE_SCOPES.copy()
+    
+    service_scopes_map = {
+        'gmail': GMAIL_SCOPES,
+        'drive': DRIVE_SCOPES,
+        'calendar': CALENDAR_SCOPES,
+        'docs': DOCS_SCOPES,
+        'sheets': SHEETS_SCOPES,
+        'chat': CHAT_SCOPES,
+        'forms': FORMS_SCOPES,
+        'slides': SLIDES_SCOPES,
+        'tasks': TASKS_SCOPES
+    }
+    
+    if service_name in service_scopes_map:
+        return base_scopes + service_scopes_map[service_name]
+    else:
+        # 如果服务名称不在预定义列表中，返回所有 scopes
+        logger.warning(f"Unknown service name: {service_name}, using all scopes")
+        return list(set(BASE_SCOPES + CALENDAR_SCOPES + DRIVE_SCOPES + GMAIL_SCOPES + 
+                       DOCS_SCOPES + CHAT_SCOPES + SHEETS_SCOPES + FORMS_SCOPES + 
+                       SLIDES_SCOPES + TASKS_SCOPES))
+
+# 根据环境变量动态选择 scopes
+SCOPES = get_scopes_for_service(server_name)
+
+# 保留原来的完整 scopes 定义作为备用
+ALL_SCOPES = list(set(BASE_SCOPES + CALENDAR_SCOPES + DRIVE_SCOPES + GMAIL_SCOPES + 
+                     DOCS_SCOPES + CHAT_SCOPES + SHEETS_SCOPES + FORMS_SCOPES + 
+                     SLIDES_SCOPES + TASKS_SCOPES))

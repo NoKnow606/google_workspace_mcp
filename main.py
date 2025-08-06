@@ -83,7 +83,10 @@ def main():
     safe_print("")
 
     # Import tool modules to register them with the MCP server via decorators
-    tool_imports = {
+    # 通过环境变量选择导入的 tool
+    server_name = os.getenv("SERVER_NAME", "google_gmail").split('_')[1]
+
+    all_tools = {
         'gmail': lambda: __import__('gmail.gmail_tools'),
         'drive': lambda: __import__('gdrive.drive_tools'),
         'calendar': lambda: __import__('gcalendar.calendar_tools'),
@@ -93,6 +96,10 @@ def main():
         'forms': lambda: __import__('gforms.forms_tools'),
         'slides': lambda: __import__('gslides.slides_tools'),
         'tasks': lambda: __import__('gtasks.tasks_tools')
+    }
+
+    tool_imports = {
+        server_name: all_tools[server_name]
     }
 
     tool_icons = {
