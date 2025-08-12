@@ -158,7 +158,7 @@ async def oauth2_callback(request: Request) -> HTMLResponse:
         return create_server_error_response(str(e))
 
 
-@server.tool
+# @server.tool
 async def start_google_auth(
     service_name: str,
     user_google_email: str = USER_GOOGLE_EMAIL,
