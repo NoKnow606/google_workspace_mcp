@@ -82,10 +82,6 @@ def main():
     safe_print(f"   🐍 Python: {sys.version.split()[0]}")
     safe_print("")
 
-    # Import tool modules to register them with the MCP server via decorators
-    # 通过环境变量选择导入的 tool
-    server_name = os.getenv("SERVER_NAME", "google_gmail").split('_')[1]
-
     all_tools = {
         'gmail': lambda: __import__('gmail.gmail_tools'),
         'drive': lambda: __import__('gdrive.drive_tools'),
@@ -98,9 +94,22 @@ def main():
         'tasks': lambda: __import__('gtasks.tasks_tools')
     }
 
-    tool_imports = {
-        server_name: all_tools[server_name]
-    }
+    # Import tool modules to register them with the MCP server via decorators
+    # 通过环境变量选择导入的 tool
+    o_server_name = os.getenv("SERVER_NAME")
+
+    if o_server_name is None:
+        tool_imports = all_tools
+
+    else:
+        server_name = o_server_name.split('_')[1]
+
+        tool_imports = {
+            server_name: all_tools[server_name]
+        }
+
+
+
 
     tool_icons = {
         'gmail': '📧',

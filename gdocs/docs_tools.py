@@ -21,16 +21,17 @@ from core.comments import create_comment_tools
 
 logger = logging.getLogger(__name__)
 
-def process_tabs_recursively(tabs: List, level: int = 0) -> List[str]:
+def process_tabs_recursively(tabs: List, level: int = 0, target_tab_id: Optional[str] = None) -> List[str]:
     """
     Recursively process tabs and their child tabs.
     
     Args:
         tabs: List of tab objects from Google Docs API
         level: Current nesting level for indentation
+        target_tab_id: If specified, only process this specific tab ID
         
     Returns:
-        List[str]: List of processed text lines from all tabs
+        List[str]: List of processed text lines from all tabs (or specific tab)
     """
     processed_lines: List[str] = []
     indent = "  " * level  # Indentation based on nesting level
@@ -39,6 +40,20 @@ def process_tabs_recursively(tabs: List, level: int = 0) -> List[str]:
         tab_properties = tab.get('tabProperties', {})
         tab_title = tab_properties.get('title', f'Tab {i+1}')
         tab_id = tab_properties.get('tabId', 'unknown')
+        
+        # If target_tab_id is specified, skip tabs that don't match
+        if target_tab_id and tab_id != target_tab_id:
+            # Still check child tabs recursively
+            child_tabs = tab.get('childTabs', [])
+            if child_tabs:
+                child_lines = process_tabs_recursively(child_tabs, level + 1, target_tab_id)
+                processed_lines.extend(child_lines)
+            
+            nested_tabs = tab.get('tabs', [])
+            if nested_tabs:
+                nested_lines = process_tabs_recursively(nested_tabs, level + 1, target_tab_id)
+                processed_lines.extend(nested_lines)
+            continue
         
         logger.info(f"[process_tabs_recursively] Processing tab at level {level}: '{tab_title}' (ID: {tab_id})")
         processed_lines.append(f"\n{indent}=== TAB {i+1}: {tab_title} (ID: {tab_id}) ===\n")
@@ -68,7 +83,7 @@ def process_tabs_recursively(tabs: List, level: int = 0) -> List[str]:
         if child_tabs:
             logger.info(f"[process_tabs_recursively] Tab '{tab_title}' has {len(child_tabs)} child tabs")
             processed_lines.append(f"{indent}--- CHILD TABS ---\n")
-            processed_lines.extend(process_tabs_recursively(child_tabs, level + 1))
+            processed_lines.extend(process_tabs_recursively(child_tabs, level + 1, target_tab_id))
             processed_lines.append(f"{indent}--- END CHILD TABS ---\n")
         
         # Also check for nested tabs in different structure
@@ -76,7 +91,7 @@ def process_tabs_recursively(tabs: List, level: int = 0) -> List[str]:
         if nested_tabs:
             logger.info(f"[process_tabs_recursively] Tab '{tab_title}' has {len(nested_tabs)} nested tabs")
             processed_lines.append(f"{indent}--- NESTED TABS ---\n")
-            processed_lines.extend(process_tabs_recursively(nested_tabs, level + 1))
+            processed_lines.extend(process_tabs_recursively(nested_tabs, level + 1, target_tab_id))
             processed_lines.append(f"{indent}--- END NESTED TABS ---\n")
     
     return processed_lines
@@ -213,16 +228,22 @@ async def get_doc_content(
     docs_service: str,
     document_id: str,
     user_google_email: Optional[str] = None,
+    tab_id: Optional[str] = None,
 ) -> str:
     """
     Retrieves content of a Google Doc or a Drive file (like .docx) identified by document_id.
     - Native Google Docs: Fetches content via Docs API.
     - Office files (.docx, etc.) stored in Drive: Downloads via Drive API and extracts text.
+    
+    Args:
+        document_id: The ID of the document to retrieve
+        user_google_email: Optional user email for context
+        tab_id: Optional tab ID to retrieve content from a specific tab only
 
     Returns:
         str: The document content with metadata header.
     """
-    logger.info(f"[get_doc_content] Invoked. Document/File ID: '{document_id}' for user '{user_google_email}'")
+    logger.info(f"[get_doc_content] Invoked. Document/File ID: '{document_id}' for user '{user_google_email}', tab_id: '{tab_id}'")
 
     # Step 2: Get file metadata from Drive
     file_metadata = await asyncio.to_thread(
@@ -283,17 +304,33 @@ async def get_doc_content(
         processed_text_lines: List[str] = []
         
         if tabs:
-            # Document has tabs - process all tabs recursively
-            logger.info(f"[get_doc_content] Processing {len(tabs)} tabs recursively")
-            processed_text_lines.extend(process_tabs_recursively(tabs, 0))
+            # Document has tabs - process all tabs recursively or filter by tab_id
+            if tab_id:
+                logger.info(f"[get_doc_content] Processing specific tab_id '{tab_id}' from {len(tabs)} tabs")
+                processed_text_lines.extend(process_tabs_recursively(tabs, 0, tab_id))
+                # Check if we found any content for the specified tab_id
+                if not processed_text_lines:
+                    logger.warning(f"[get_doc_content] No content found for tab_id '{tab_id}'")
+                    return f'File: "{file_name}" (ID: {document_id}, Type: {mime_type})\nLink: {web_view_link}\n\n--- ERROR ---\nNo tab found with tab_id "{tab_id}".'
+            else:
+                logger.info(f"[get_doc_content] Processing all {len(tabs)} tabs recursively")
+                processed_text_lines.extend(process_tabs_recursively(tabs, 0))
         else:
             # Document without tabs - process body content directly
+            if tab_id:
+                logger.warning(f"[get_doc_content] tab_id '{tab_id}' specified but document has no tabs")
+                return f'File: "{file_name}" (ID: {document_id}, Type: {mime_type})\nLink: {web_view_link}\n\n--- ERROR ---\nSpecified tab_id "{tab_id}" but document has no tabs.'
             body_elements = doc_data.get('body', {}).get('content', [])
             processed_text_lines.extend(process_structural_elements(body_elements))
             
         body_text = "".join(processed_text_lines)
     else:
         logger.info(f"[get_doc_content] Processing as Drive file (e.g., .docx, other). MimeType: {mime_type}")
+        
+        # tab_id is not supported for non-Google Docs files
+        if tab_id:
+            logger.warning(f"[get_doc_content] tab_id '{tab_id}' specified but not supported for non-Google Docs files")
+            return f'File: "{file_name}" (ID: {document_id}, Type: {mime_type})\nLink: {web_view_link}\n\n--- ERROR ---\ntab_id is not supported for non-Google Docs files.'
 
         export_mime_type_map = {
                 # Example: "application/vnd.google-apps.spreadsheet"z: "text/csv",

@@ -115,7 +115,7 @@ TASKS_SCOPES = [
 ]
 
 # 通过环境变量选择 scopes
-server_name = os.getenv("SERVER_NAME", "google_gmail").split('_')[1]
+o_server_name = os.getenv("SERVER_NAME")
 
 # 根据服务名称选择对应的 scopes
 def get_scopes_for_service(service_name: str) -> list:
@@ -143,10 +143,11 @@ def get_scopes_for_service(service_name: str) -> list:
                        DOCS_SCOPES + CHAT_SCOPES + SHEETS_SCOPES + FORMS_SCOPES + 
                        SLIDES_SCOPES + TASKS_SCOPES))
 
-# 根据环境变量动态选择 scopes
-SCOPES = get_scopes_for_service(server_name)
-
 # 保留原来的完整 scopes 定义作为备用
-ALL_SCOPES = list(set(BASE_SCOPES + CALENDAR_SCOPES + DRIVE_SCOPES + GMAIL_SCOPES + 
-                     DOCS_SCOPES + CHAT_SCOPES + SHEETS_SCOPES + FORMS_SCOPES + 
+ALL_SCOPES = list(set(BASE_SCOPES + CALENDAR_SCOPES + DRIVE_SCOPES + GMAIL_SCOPES +
+                     DOCS_SCOPES + CHAT_SCOPES + SHEETS_SCOPES + FORMS_SCOPES +
                      SLIDES_SCOPES + TASKS_SCOPES))
+
+# 根据环境变量动态选择 scopes
+SCOPES = get_scopes_for_service(o_server_name.split('_')[1]) if o_server_name is not None else ALL_SCOPES
+
