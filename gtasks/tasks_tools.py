@@ -26,7 +26,7 @@ async def list_task_lists(
     user_google_email: Optional[str] = None,
     max_results: Optional[int] = None,
     page_token: Optional[str] = None
-) -> str:
+):
     """
     List all task lists for the user.
 
@@ -85,7 +85,7 @@ async def get_task_list(
     ctx: Context,
     task_list_id: str,
     user_google_email: Optional[str] = None
-) -> str:
+):
     """
     Get details of a specific task list.
 
@@ -129,7 +129,7 @@ async def create_task_list(
     ctx: Context,
     title: str,
     user_google_email: Optional[str] = None
-) -> str:
+):
     """
     Create a new task list.
 
@@ -178,7 +178,7 @@ async def update_task_list(
     task_list_id: str,
     title: str,
     user_google_email: Optional[str] = None
-) -> str:
+):
     """
     Update an existing task list.
 
@@ -227,7 +227,7 @@ async def delete_task_list(
     ctx: Context,
     task_list_id: str,
     user_google_email: Optional[str] = None
-) -> str:
+):
     """
     Delete a task list. Note: This will also delete all tasks in the list.
 
@@ -278,7 +278,7 @@ async def list_tasks(
     due_max: Optional[str] = None,
     due_min: Optional[str] = None,
     updated_min: Optional[str] = None
-) -> str:
+):
     """
     List all tasks in a specific task list.
 
@@ -374,7 +374,7 @@ async def get_task(
     task_list_id: str,
     task_id: str,
     user_google_email: Optional[str] = None
-) -> str:
+):
     """
     Get details of a specific task.
 
@@ -439,7 +439,7 @@ async def create_task(
     due: Optional[str] = None,
     parent: Optional[str] = None,
     previous: Optional[str] = None
-) -> str:
+):
     """
     Create a new task in a task list.
 
@@ -514,7 +514,7 @@ async def update_task(
     notes: Optional[str] = None,
     status: Optional[str] = None,
     due: Optional[str] = None
-) -> str:
+):
     """
     Update an existing task.
 
@@ -592,7 +592,7 @@ async def delete_task(
     task_list_id: str,
     task_id: str,
     user_google_email: Optional[str] = None
-) -> str:
+):
     """
     Delete a task from a task list.
 
@@ -637,7 +637,7 @@ async def move_task(
     parent: Optional[str] = None,
     previous: Optional[str] = None,
     destination_task_list: Optional[str] = None
-) -> str:
+):
     """
     Move a task to a different position or parent within the same list, or to a different list.
 
@@ -712,7 +712,7 @@ async def clear_completed_tasks(
     ctx: Context,
     task_list_id: str,
     user_google_email: Optional[str] = None
-) -> str:
+):
     """
     Clear all completed tasks from a task list. The tasks will be marked as hidden.
 

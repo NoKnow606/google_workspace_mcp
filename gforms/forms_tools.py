@@ -28,7 +28,7 @@ async def create_form(
     user_google_email: Optional[str] = None,
     description: Optional[str] = None,
     document_title: Optional[str] = None
-) -> str:
+):
     """
     Create a new form using the title given in the provided form message in the request.
 
@@ -76,7 +76,7 @@ async def get_form(
     ctx: Context,
     form_id: str,
     user_google_email: Optional[str] = None
-) -> str:
+):
     """
     Get a form.
 
@@ -135,7 +135,7 @@ async def set_publish_settings(
     user_google_email: Optional[str] = None,
     publish_as_template: bool = False,
     require_authentication: bool = False
-) -> str:
+):
     """
     Updates the publish settings of a form.
 
@@ -173,7 +173,7 @@ async def get_form_response(
     form_id: str,
     response_id: str,
     user_google_email: Optional[str] = None
-) -> str:
+):
     """
     Get one response from the form.
 
@@ -229,7 +229,7 @@ async def list_form_responses(
     user_google_email: Optional[str] = None,
     page_size: int = 10,
     page_token: Optional[str] = None
-) -> str:
+):
     """
     List a form's responses.
 

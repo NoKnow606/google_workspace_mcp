@@ -29,7 +29,7 @@ async def list_spreadsheets(
     ctx: Context,
     user_google_email: Optional[str] = None,
     max_results: int = 25,
-) -> str:
+):
     """
     Lists spreadsheets from Google Drive that the user has access to.
 
@@ -79,7 +79,7 @@ async def get_spreadsheet_info(
     ctx: Context,
     spreadsheet_id: str,
     user_google_email: Optional[str] = None,
-) -> str:
+):
     """
     Gets information about a specific spreadsheet including its sheets.
 
@@ -131,7 +131,7 @@ async def read_sheet_values(
     spreadsheet_id: str,
     user_google_email: Optional[str] = None,
     range_name: str = "A1:Z1000",
-) -> str:
+):
     """
     Reads values from a specific range in a Google Sheet.
 
@@ -185,7 +185,7 @@ async def modify_sheet_values(
     values: Optional[List[List[str]]] = None,
     value_input_option: str = "USER_ENTERED",
     clear_values: bool = False,
-) -> str:
+):
     """
     Modifies values in a specific range of a Google Sheet - can write, update, or clear values.
 
@@ -254,7 +254,7 @@ async def create_spreadsheet(
     title: str,
     user_google_email: Optional[str] = None,
     sheet_names: Optional[List[str]] = None,
-) -> str:
+):
     """
     Creates a new Google Spreadsheet.
 
@@ -304,7 +304,7 @@ async def create_sheet(
     spreadsheet_id: str,
     sheet_name: str,
     user_google_email: Optional[str] = None,
-) -> str:
+):
     """
     Creates a new sheet within an existing spreadsheet.
 

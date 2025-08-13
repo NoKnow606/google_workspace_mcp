@@ -187,7 +187,7 @@ async def search_docs(
     query: str,
     page_size: int = 10,
     user_google_email: Optional[str] = None,
-) -> str:
+):
     """
     Searches for Google Docs by name using Drive API (mimeType filter).
 
@@ -229,7 +229,7 @@ async def get_doc_content(
     document_id: str,
     user_google_email: Optional[str] = None,
     tab_id: Optional[str] = None,
-) -> str:
+):
     """
     Retrieves content of a Google Doc or a Drive file (like .docx) identified by document_id.
     - Native Google Docs: Fetches content via Docs API.
@@ -382,7 +382,7 @@ async def list_docs_in_folder(
     user_google_email: Optional[str] = None,
     folder_id: str = 'root',
     page_size: int = 100
-) -> str:
+):
     """
     Lists Google Docs within a specific Drive folder.
 
@@ -415,7 +415,7 @@ async def create_doc(
     title: str,
     user_google_email: Optional[str] = None,
     content: str = '',
-) -> str:
+):
     """
     Creates a new Google Doc and optionally inserts initial content.
 

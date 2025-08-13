@@ -80,7 +80,7 @@ def set_transport_mode(mode: str):
     _current_transport_mode = mode
     logger.info(f"Transport mode set to: {mode}")
 
-def get_oauth_redirect_uri_for_current_mode() -> str:
+def get_oauth_redirect_uri_for_current_mode():
     """Get OAuth redirect URI based on current transport mode."""
     return get_oauth_redirect_uri(WORKSPACE_MCP_PORT, WORKSPACE_MCP_BASE_URI)
 
@@ -163,7 +163,7 @@ async def start_google_auth(
     service_name: str,
     user_google_email: str = USER_GOOGLE_EMAIL,
     mcp_session_id: Optional[str] = Header(None, alias="Mcp-Session-Id")
-) -> str:
+):
     """
     Initiates the Google OAuth 2.0 authentication flow for the specified user email and service.
     This is the primary method to establish credentials when no valid session exists or when targeting a specific account for a particular service.

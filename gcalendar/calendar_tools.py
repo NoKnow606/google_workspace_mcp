@@ -83,7 +83,7 @@ def _correct_time_format_for_api(
 @server.tool
 @require_google_service("calendar", "calendar_read")
 @handle_http_errors("list_calendars")
-async def list_calendars(service, ctx: Context, user_google_email: Optional[str] = None) -> str:
+async def list_calendars(service, ctx: Context, user_google_email: Optional[str] = None):
     """
     Retrieves a list of calendars accessible to the authenticated user.
 
@@ -125,7 +125,7 @@ async def get_events(
     time_min: Optional[str] = None,
     time_max: Optional[str] = None,
     max_results: int = 25,
-) -> str:
+):
     """
     Retrieves a list of events from a specified Google Calendar within a given time range.
 
@@ -219,7 +219,7 @@ async def create_event(
     attendees: Optional[List[str]] = None,
     timezone: Optional[str] = None,
     attachments: Optional[List[str]] = None,
-) -> str:
+):
     """
     Creates a new event.
 
@@ -344,7 +344,7 @@ async def modify_event(
     location: Optional[str] = None,
     attendees: Optional[List[str]] = None,
     timezone: Optional[str] = None,
-) -> str:
+):
     """
     Modifies an existing event.
 
@@ -452,7 +452,7 @@ async def modify_event(
 @server.tool
 @require_google_service("calendar", "calendar_events")
 @handle_http_errors("delete_event")
-async def delete_event(service,ctx: Context, event_id: str, user_google_email: Optional[str] = None, calendar_id: str = "primary") -> str:
+async def delete_event(service,ctx: Context, event_id: str, user_google_email: Optional[str] = None, calendar_id: str = "primary"):
     """
     Deletes an existing event.
 
@@ -512,7 +512,7 @@ async def get_event(
     event_id: str,
     user_google_email: Optional[str] = None,
     calendar_id: str = "primary"
-) -> str:
+):
     """
     Retrieves the details of a single event by its ID from a specified Google Calendar.
 

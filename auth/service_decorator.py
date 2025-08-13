@@ -86,7 +86,7 @@ _service_cache: Dict[str, tuple[Any, datetime, str]] = {}
 _cache_ttl = timedelta(minutes=30)  # Cache services for 30 minutes
 
 
-def _get_cache_key(user_email: str, service_name: str, version: str, scopes: List[str]) -> str:
+def _get_cache_key(user_email: str, service_name: str, version: str, scopes: List[str]):
     """Generate a cache key for service instances."""
     sorted_scopes = sorted(scopes)
     return f"{user_email}:{service_name}:{version}:{':'.join(sorted_scopes)}"
@@ -134,7 +134,7 @@ def _resolve_scopes(scopes: Union[str, List[str]]) -> List[str]:
     return resolved
 
 
-def _handle_token_refresh_error(error: RefreshError, user_email: str, service_name: str) -> str:
+def _handle_token_refresh_error(error: RefreshError, user_email: str, service_name: str):
     """
     Handle token refresh errors gracefully, particularly expired/revoked tokens.
 

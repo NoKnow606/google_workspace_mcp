@@ -323,7 +323,7 @@ def _find_any_credentials(
 
 def _get_user_credential_path(
     user_google_email: str, base_dir: str = DEFAULT_CREDENTIALS_DIR
-) -> str:
+):
     """Constructs the path to a user's credential file."""
     if not os.path.exists(base_dir):
         os.makedirs(base_dir)
@@ -894,7 +894,7 @@ async def start_auth_flow(
     user_google_email: Optional[str],
     service_name: str,  # e.g., "Google Calendar", "Gmail" for user messages
     redirect_uri: str,  # Added redirect_uri as a required parameter
-) -> str:
+):
     """
     Initiates the Google OAuth flow and returns an actionable message for the user.
 

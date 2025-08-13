@@ -88,7 +88,7 @@ async def search_drive_files(
     drive_id: Optional[str] = None,
     include_items_from_all_drives: bool = True,
     corpora: Optional[str] = None,
-) -> str:
+):
     """
     Searches for files and folders within a user's Google Drive, including shared drives.
 
@@ -152,7 +152,7 @@ async def get_drive_file_content(
     ctx: Context,
     file_id: str,
     user_google_email: Optional[str] = None,
-) -> str:
+):
     """
     Retrieves the content of a specific Google Drive file by ID, supporting files in shared drives.
 
@@ -247,7 +247,7 @@ async def list_drive_items(
     drive_id: Optional[str] = None,
     include_items_from_all_drives: bool = True,
     corpora: Optional[str] = None,
-) -> str:
+):
     """
     Lists files and folders, supporting shared drives.
     If `drive_id` is specified, lists items within that shared drive. `folder_id` is then relative to that drive (or use drive_id as folder_id for root).
@@ -304,7 +304,7 @@ async def create_drive_file(
     folder_id: str = 'root',
     mime_type: str = 'text/plain',
     fileUrl: Optional[str] = None,  # Now explicitly Optional
-) -> str:
+):
     """
     Creates a new file in Google Drive, supporting creation within shared drives.
     Accepts either direct content or a fileUrl to fetch the content from.

@@ -181,7 +181,7 @@ class MinimalOAuthServer:
 # Global instance for stdio mode
 _minimal_oauth_server: Optional[MinimalOAuthServer] = None
 
-def get_oauth_redirect_uri(port: int = 8000, base_uri: str = "http://localhost") -> str:
+def get_oauth_redirect_uri(port: int = 8000, base_uri: str = "http://localhost"):
     """
     Get the appropriate OAuth redirect URI.
 

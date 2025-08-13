@@ -82,7 +82,7 @@ def _extract_headers(payload: dict, header_names: List[str]) -> Dict[str, str]:
     return headers
 
 
-def _generate_gmail_web_url(item_id: str, account_index: int = 0) -> str:
+def _generate_gmail_web_url(item_id: str, account_index: int = 0):
     """
     Generate Gmail web interface URL for a message or thread ID.
     Uses #all to access messages from any Gmail folder/label (not just inbox).
@@ -97,7 +97,7 @@ def _generate_gmail_web_url(item_id: str, account_index: int = 0) -> str:
     return f"https://mail.google.com/mail/u/{account_index}/#all/{item_id}"
 
 
-def _format_gmail_results_plain(messages: list, query: str) -> str:
+def _format_gmail_results_plain(messages: list, query: str):
     """Format Gmail search results in clean, LLM-friendly plain text."""
     if not messages:
         return f"No messages found for query: '{query}'"
@@ -136,7 +136,7 @@ def _format_gmail_results_plain(messages: list, query: str) -> str:
 @handle_http_errors("search_gmail_messages")
 async def search_gmail_messages(
     service, ctx: Context, query: str, user_google_email: Optional[str] = None, page_size: int = 10
-) -> str:
+):
     """
     Searches messages in a user's Gmail account based on a query.
     Returns both Message IDs and Thread IDs for each found message, along with Gmail web interface links for manual verification.
@@ -170,7 +170,7 @@ async def search_gmail_messages(
 @handle_http_errors("get_gmail_message_content")
 async def get_gmail_message_content(
     service, ctx: Context,  message_id: str, user_google_email: Optional[str] = None
-) -> str:
+):
     """
     Retrieves the full content (subject, sender, plain text body) of a specific Gmail message.
 
@@ -242,7 +242,7 @@ async def get_gmail_messages_content_batch(
     message_ids: List[str],
     user_google_email: Optional[str] = None,
     format: Literal["full", "metadata"] = "full",
-) -> str:
+):
     """
     Retrieves the content of multiple Gmail messages in a single batch request.
     Supports up to 100 messages per request using Google's batch API.
@@ -397,7 +397,7 @@ async def send_gmail_message(
     to: str = Body(..., description="Recipient email address."),
     subject: str = Body(..., description="Email subject."),
     body: str = Body(..., description="Email body (plain text)."),
-) -> str:
+):
     """
     Sends an email using the user's Gmail account.
 
@@ -435,7 +435,7 @@ async def draft_gmail_message(
     body: str = Body(..., description="Email body (plain text)."),
     user_google_email: Optional[str] = None,
     to: Optional[str] = Body(None, description="Optional recipient email address."),
-) -> str:
+):
     """
     Creates a draft email in the user's Gmail account.
 
@@ -478,7 +478,7 @@ async def draft_gmail_message(
 @handle_http_errors("get_gmail_thread_content")
 async def get_gmail_thread_content(
     service, ctx: Context, thread_id: str, user_google_email: Optional[str] = None
-) -> str:
+):
     """
     Retrieves the complete content of a Gmail conversation thread, including all messages.
 
@@ -565,7 +565,7 @@ async def get_gmail_thread_content(
 @server.tool
 @require_google_service("gmail", "gmail_read")
 @handle_http_errors("list_gmail_labels")
-async def list_gmail_labels(service, ctx: Context, user_google_email: Optional[str] = None) -> str:
+async def list_gmail_labels(service, ctx: Context, user_google_email: Optional[str] = None):
     """
     Lists all labels in the user's Gmail account.
 
@@ -622,7 +622,7 @@ async def manage_gmail_label(
     user_google_email: Optional[str] = None,
     label_list_visibility: Literal["labelShow", "labelHide"] = "labelShow",
     message_list_visibility: Literal["show", "hide"] = "show",
-) -> str:
+):
     """
     Manages Gmail labels: create, update, or delete labels.
 
@@ -695,7 +695,7 @@ async def modify_gmail_message_labels(
     add_label_ids: Optional[List[str]] = None,
     remove_label_ids: Optional[List[str]] = None,
     user_google_email: Optional[str] = None,
-) -> str:
+):
     """
     Adds or removes labels from a Gmail message.
 

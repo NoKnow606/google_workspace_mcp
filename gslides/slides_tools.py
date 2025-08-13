@@ -28,7 +28,7 @@ async def create_presentation(
     ctx: Context,
     user_google_email: Optional[str] = None,
     title: str = "Untitled Presentation"
-) -> str:
+):
     """
     Create a new Google Slides presentation.
 
@@ -70,7 +70,7 @@ async def get_presentation(
     ctx: Context,
     presentation_id: str,
     user_google_email: Optional[str] = None
-) -> str:
+):
     """
     Get details about a Google Slides presentation.
 
@@ -120,7 +120,7 @@ async def batch_update_presentation(
     presentation_id: str,
     requests: List[Dict[str, Any]],
     user_google_email: Optional[str] = None
-) -> str:
+):
     """
     Apply batch updates to a Google Slides presentation.
 
@@ -178,7 +178,7 @@ async def get_page(
     presentation_id: str,
     page_object_id: str,
     user_google_email: Optional[str] = None
-) -> str:
+):
     """
     Get details about a specific page (slide) in a presentation.
 
@@ -242,7 +242,7 @@ async def get_page_thumbnail(
     page_object_id: str,
     user_google_email: Optional[str] = None,
     thumbnail_size: str = "MEDIUM"
-) -> str:
+):
     """
     Generate a thumbnail URL for a specific page (slide) in a presentation.
 
