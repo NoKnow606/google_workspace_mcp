@@ -180,11 +180,8 @@ def handle_http_errors(tool_name: str):
             try:
                 return await func(*args, **kwargs)
             except HttpError as error:
-                user_google_email = kwargs.get('user_google_email', 'N/A')
                 message = (
                     f"API error in {tool_name}: {error}. "
-                    f"You might need to re-authenticate for user '{user_google_email}'. "
-                    f"LLM: Try 'start_google_auth' with the user's email and the appropriate service_name."
                 )
                 logger.error(message, exc_info=True)
                 raise Exception(message)
