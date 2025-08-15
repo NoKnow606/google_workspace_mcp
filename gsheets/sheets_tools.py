@@ -138,8 +138,7 @@ async def read_sheet_values(
     Args:
         user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
         spreadsheet_id (str): The ID of the spreadsheet. Required.
-        range_name (str): The range to read (e.g., "Sheet1!A1:D10", "A1:D10"). Defaults to "A1:Z1000".
-
+        range_name (str): The range to read (e.g., "Sheet1!A1:D10", "A1:D10"). Defaults to "A1:Z100". Maximum 100 rows can be retrieved.
     Returns:
         str: The formatted values from the specified range.
     """
@@ -165,8 +164,7 @@ async def read_sheet_values(
 
     text_output = (
         f"Successfully read {len(values)} rows from range '{range_name}' in spreadsheet {spreadsheet_id} for {user_google_email}:\n"
-        + "\n".join(formatted_rows[:50])  # Limit to first 50 rows for readability
-        + (f"\n... and {len(values) - 50} more rows" if len(values) > 50 else "")
+        + "\n".join(formatted_rows)
     )
 
     logger.info(f"Successfully read {len(values)} rows for {user_google_email}.")
