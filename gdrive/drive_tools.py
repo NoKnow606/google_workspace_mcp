@@ -90,7 +90,13 @@ async def search_drive_files(
     corpora: Optional[str] = None,
 ):
     """
-    Searches for files and folders within a user's Google Drive, including shared drives.
+    <description>Searches files and folders across Google Drive using advanced search operators (name:, type:, owner:, etc.) or full-text content search. Supports both personal Drive and shared drives with up to 1000 results per query.</description>
+    
+    <use_case>Finding specific documents for processing, locating files by content or metadata, or discovering shared resources across organizational drives for collaborative workflows.</use_case>
+    
+    <limitation>Limited to 1000 results per search. Full-text search works only on Google Workspace formats and text files. Cannot search file content in binary formats or very large files.</limitation>
+    
+    <failure_cases>Fails with malformed Drive query syntax, when user lacks Drive access permissions, or if searching restricted shared drives without proper access rights.</failure_cases>
 
     Args:
         user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
@@ -154,15 +160,16 @@ async def get_drive_file_content(
     user_google_email: Optional[str] = None,
 ):
     """
-    Retrieves the content of a specific Google Drive file by ID, supporting files in shared drives.
-
-    • Native Google Docs, Sheets, Slides → exported as text / CSV.
-    • Office files (.docx, .xlsx, .pptx) → unzipped & parsed with std-lib to
-      extract readable text.
-    • Any other file → downloaded; tries UTF-8 decode, else notes binary.
+    <description>Downloads and extracts readable text content from Google Drive files including Google Docs (as plain text), Sheets (as CSV), and Office files (parsed XML). Handles up to 100MB files efficiently.</description>
+    
+    <use_case>Extracting document content for analysis, processing spreadsheet data for reporting, or converting files to text for content processing workflows.</use_case>
+    
+    <limitation>Limited to 100MB file size. Binary files return size info only. Complex formatting in documents is lost during text extraction. Cannot access password-protected files.</limitation>
+    
+    <failure_cases>Fails with invalid file IDs, files the user cannot access due to permissions, very large files exceeding download limits, or corrupted/encrypted files.</failure_cases>
 
     Args:
-        user_google_email: The user’s Google email address.
+        user_google_email: The user's Google email address.
         file_id: Drive file ID.
 
     Returns:
@@ -249,9 +256,13 @@ async def list_drive_items(
     corpora: Optional[str] = None,
 ):
     """
-    Lists files and folders, supporting shared drives.
-    If `drive_id` is specified, lists items within that shared drive. `folder_id` is then relative to that drive (or use drive_id as folder_id for root).
-    If `drive_id` is not specified, lists items from user's "My Drive" and accessible shared drives (if `include_items_from_all_drives` is True).
+    <description>Lists files and folders within a specific Drive folder showing names, types, sizes, and modification dates. Supports both personal Drive root and shared drive navigation with up to 100 items per page.</description>
+    
+    <use_case>Browsing folder contents for file discovery, understanding Drive organization structure, or getting file lists for batch operations within specific directories.</use_case>
+    
+    <limitation>Limited to 100 items per page requiring pagination for large folders. Shows only immediate children - not recursive contents. Cannot list items in restricted folders without permissions.</limitation>
+    
+    <failure_cases>Fails with invalid folder IDs, folders the user cannot access due to sharing restrictions, or when trying to list contents of files (not folders).</failure_cases>
 
     Args:
         user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
@@ -306,8 +317,13 @@ async def create_drive_file(
     fileUrl: Optional[str] = None,  # Now explicitly Optional
 ):
     """
-    Creates a new file in Google Drive, supporting creation within shared drives.
-    Accepts either direct content or a fileUrl to fetch the content from.
+    <description>Creates a new file in Google Drive from direct content or by downloading from a URL. Supports text files, documents, and binary data up to 100MB with automatic MIME type detection from URLs.</description>
+    
+    <use_case>Uploading processed results to Drive, creating backup copies of external files, or generating reports that need to be stored in specific Drive folders for sharing.</use_case>
+    
+    <limitation>Limited to 100MB file size. Cannot create Google Workspace native files (Docs/Sheets/Slides) - only regular files. Requires either content or fileUrl parameter.</limitation>
+    
+    <failure_cases>Fails with invalid folder IDs, insufficient Drive storage quota, unreachable fileUrl sources, or when user lacks file creation permissions in the target folder.</failure_cases>
 
     Args:
         user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.

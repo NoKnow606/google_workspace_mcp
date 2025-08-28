@@ -31,7 +31,13 @@ async def list_spreadsheets(
     max_results: int = 25,
 ):
     """
-    Lists spreadsheets from Google Drive that the user has access to.
+    <description>Lists Google Sheets spreadsheets from Drive ordered by modification time, showing file names, IDs, and last modified timestamps. Returns up to 25 spreadsheets by default.</description>
+    
+    <use_case>Finding existing spreadsheets for data analysis, locating recently modified sheets for collaborative work, or getting spreadsheet IDs for further operations.</use_case>
+    
+    <limitation>Limited to Google Sheets format only - excludes Excel files or other formats. Shows only files user has access to, not all organizational spreadsheets.</limitation>
+    
+    <failure_cases>Fails if user lacks Google Drive access permissions, if Drive API quotas are exceeded, or during temporary Google Drive service outages.</failure_cases>
 
     Args:
         user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
@@ -81,7 +87,13 @@ async def get_spreadsheet_info(
     user_google_email: Optional[str] = None,
 ):
     """
-    Gets information about a specific spreadsheet including its sheets.
+    <description>Retrieves spreadsheet metadata including title, sheet names, sheet IDs, and grid dimensions (rows/columns) for each sheet. Shows spreadsheet structure without cell data.</description>
+    
+    <use_case>Understanding spreadsheet organization before data operations, getting sheet names for range specifications, or analyzing spreadsheet structure for automation.</use_case>
+    
+    <limitation>Returns structure metadata only - no cell values or formulas. Cannot retrieve information for spreadsheets without proper access permissions.</limitation>
+    
+    <failure_cases>Fails with invalid spreadsheet IDs, spreadsheets the user cannot access due to sharing restrictions, or spreadsheets that have been deleted.</failure_cases>
 
     Args:
         user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
@@ -133,7 +145,13 @@ async def read_sheet_values(
     range_name: str = "A1:Z1000",
 ):
     """
-    Reads values from a specific range in a Google Sheet.
+    <description>Extracts cell values from a specified range in Google Sheets, returning formatted data as text. Handles up to 1000 rows efficiently with support for formulas, numbers, and text values.</description>
+    
+    <use_case>Reading spreadsheet data for analysis, extracting specific data ranges for processing, or getting current values from collaborative sheets for reporting.</use_case>
+    
+    <limitation>Limited to 1000 rows per request for performance. Returns calculated formula results, not formulas themselves. Cannot read protected ranges without proper permissions.</limitation>
+    
+    <failure_cases>Fails with invalid spreadsheet IDs or range specifications, ranges in protected sheets without access, or when spreadsheet contains unsupported data types.</failure_cases>
 
     Args:
         user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
@@ -185,7 +203,13 @@ async def modify_sheet_values(
     clear_values: bool = False,
 ):
     """
-    Modifies values in a specific range of a Google Sheet - can write, update, or clear values.
+    <description>Updates or clears cell values in a specified range of Google Sheets. Supports writing 2D arrays of data, formulas, and numbers with automatic type detection when using USER_ENTERED mode.</description>
+    
+    <use_case>Updating spreadsheet data from external sources, clearing outdated information, or writing calculated results back to sheets for collaborative workflows.</use_case>
+    
+    <limitation>Cannot modify protected ranges without edit permissions. Limited by sheet size constraints (~10 million cells). Overwrites existing data within the specified range.</limitation>
+    
+    <failure_cases>Fails with invalid range specifications, insufficient edit permissions on protected sheets, or when trying to write arrays larger than the target range.</failure_cases>
 
     Args:
         user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
@@ -254,7 +278,13 @@ async def create_spreadsheet(
     sheet_names: Optional[List[str]] = None,
 ):
     """
-    Creates a new Google Spreadsheet.
+    <description>Creates a new Google Sheets spreadsheet with specified title and optional custom sheet names. Generates an empty spreadsheet ready for data entry with standard 1000x26 grid dimensions.</description>
+    
+    <use_case>Creating new data collection spreadsheets, setting up project tracking sheets, or initializing data analysis workbooks with predefined sheet structure.</use_case>
+    
+    <limitation>Creates empty sheets only - no data, formatting, or formulas. Limited to 200 sheets per spreadsheet. Cannot apply templates or import data during creation.</limitation>
+    
+    <failure_cases>Fails if user lacks Google Sheets creation permissions, if title exceeds character limits, or if Google Drive storage quota is exceeded.</failure_cases>
 
     Args:
         user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
@@ -304,7 +334,13 @@ async def create_sheet(
     user_google_email: Optional[str] = None,
 ):
     """
-    Creates a new sheet within an existing spreadsheet.
+    <description>Adds a new empty sheet tab to an existing Google Sheets spreadsheet with specified name. Creates a standard 1000x26 grid ready for data entry within the existing workbook.</description>
+    
+    <use_case>Organizing data into separate sheets within a workbook, creating monthly/quarterly data tabs, or setting up different data categories in the same spreadsheet.</use_case>
+    
+    <limitation>Cannot create sheets with duplicate names within the same spreadsheet. Limited to 200 sheets per spreadsheet. Creates empty sheet only - no data or formatting.</limitation>
+    
+    <failure_cases>Fails with invalid spreadsheet IDs, duplicate sheet names within the spreadsheet, insufficient edit permissions, or when spreadsheet already has maximum sheet count.</failure_cases>
 
     Args:
         user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.

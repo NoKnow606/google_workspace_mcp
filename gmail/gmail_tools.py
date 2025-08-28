@@ -138,8 +138,13 @@ async def search_gmail_messages(
     service, ctx: Context, query: str, user_google_email: Optional[str] = None, page_size: int = 10
 ):
     """
-    Searches messages in a user's Gmail account based on a query.
-    Returns both Message IDs and Thread IDs for each found message, along with Gmail web interface links for manual verification.
+    <description>Searches Gmail messages using standard Gmail search operators (from:, subject:, has:attachment, etc.) and returns message/thread IDs with web links. Returns up to 10 messages by default for efficient processing.</description>
+    
+    <use_case>Finding specific emails for follow-up, locating messages with attachments for processing, or identifying email threads for conversation analysis using Gmail's powerful search syntax.</use_case>
+    
+    <limitation>Returns only metadata (IDs, links) - use get_gmail_message_content for actual message content. Limited to 500 messages per request. Cannot search deleted or permanently removed messages.</limitation>
+    
+    <failure_cases>Fails with malformed Gmail search syntax, when user lacks Gmail access permissions, or during temporary Gmail API outages. Complex queries may timeout.</failure_cases>
 
     Args:
         query (str): The search query. Supports standard Gmail search operators.
@@ -172,7 +177,13 @@ async def get_gmail_message_content(
     service, ctx: Context,  message_id: str, user_google_email: Optional[str] = None
 ):
     """
-    Retrieves the full content (subject, sender, plain text body) of a specific Gmail message.
+    <description>Retrieves complete Gmail message content including subject, sender, and plain text body. Extracts readable text from multipart messages and handles various email formats automatically.</description>
+    
+    <use_case>Reading individual email content for analysis, extracting message details for processing, or getting full context of specific messages found through search.</use_case>
+    
+    <limitation>Returns only plain text content - HTML formatting and attachments are not included. Cannot retrieve messages from restricted or deleted conversations.</limitation>
+    
+    <failure_cases>Fails with invalid message IDs, messages the user cannot access due to permissions, or messages that have been permanently deleted from Gmail.</failure_cases>
 
     Args:
         message_id (str): The unique ID of the Gmail message to retrieve.
@@ -244,8 +255,13 @@ async def get_gmail_messages_content_batch(
     format: Literal["full", "metadata"] = "full",
 ):
     """
-    Retrieves the content of multiple Gmail messages in a single batch request.
-    Supports up to 100 messages per request using Google's batch API.
+    <description>Efficiently retrieves multiple Gmail messages (up to 100) in a single batch API request. Supports both full content extraction and metadata-only mode for performance optimization.</description>
+    
+    <use_case>Processing large email datasets for analysis, bulk email content extraction for reporting, or efficient retrieval of multiple related messages from search results.</use_case>
+    
+    <limitation>Limited to 100 messages per batch request. Fallback to sequential processing if batch API fails. Full format significantly slower than metadata-only for large batches.</limitation>
+    
+    <failure_cases>Fails if any message IDs are invalid, when batch API is temporarily unavailable, or if user lacks access to any messages in the batch.</failure_cases>
 
     Args:
         message_ids (List[str]): List of Gmail message IDs to retrieve (max 100).
@@ -399,7 +415,13 @@ async def send_gmail_message(
     body: str = Body(..., description="Email body (plain text)."),
 ):
     """
-    Sends an email using the user's Gmail account.
+    <description>Sends a plain text email immediately from the user's Gmail account to a specified recipient. Email is delivered instantly and appears in the user's Sent folder.</description>
+    
+    <use_case>Sending automated notifications, quick responses to customer inquiries, or delivering processing results via email with immediate delivery requirements.</use_case>
+    
+    <limitation>Supports only plain text emails - no HTML formatting, attachments, or multiple recipients. Cannot schedule emails for later delivery or recall sent messages.</limitation>
+    
+    <failure_cases>Fails with invalid email addresses, when user lacks Gmail send permissions, if daily sending limits are exceeded, or if recipient domain blocks the sender.</failure_cases>
 
     Args:
         to (str): Recipient email address.
@@ -437,7 +459,13 @@ async def draft_gmail_message(
     to: Optional[str] = Body(None, description="Optional recipient email address."),
 ):
     """
-    Creates a draft email in the user's Gmail account.
+    <description>Creates a draft email in Gmail's Drafts folder without sending. Draft can be completed and sent later through Gmail interface or API, supporting iterative email composition.</description>
+    
+    <use_case>Preparing emails for review before sending, creating template emails for later use, or composing complex messages that require additional formatting in Gmail interface.</use_case>
+    
+    <limitation>Creates plain text drafts only - no HTML formatting or attachments. Recipient can be omitted but must be added before sending the draft.</limitation>
+    
+    <failure_cases>Fails when user lacks Gmail compose permissions, if draft storage quota is exceeded, or during temporary Gmail API service interruptions.</failure_cases>
 
     Args:
         user_google_email (Optional[str]): The user's Google email address. Optional.
@@ -480,7 +508,13 @@ async def get_gmail_thread_content(
     service, ctx: Context, thread_id: str, user_google_email: Optional[str] = None
 ):
     """
-    Retrieves the complete content of a Gmail conversation thread, including all messages.
+    <description>Retrieves all messages within a Gmail conversation thread in chronological order, showing the complete email exchange history with sender details and timestamps.</description>
+    
+    <use_case>Analyzing complete email conversations for customer support, understanding full context of email exchanges, or extracting conversation history for documentation.</use_case>
+    
+    <limitation>Returns plain text content only - no HTML formatting or attachments. Cannot retrieve threads that have been permanently deleted or are restricted by permissions.</limitation>
+    
+    <failure_cases>Fails with invalid thread IDs, threads the user cannot access due to permissions, or threads that have been completely removed from Gmail.</failure_cases>
 
     Args:
         thread_id (str): The unique ID of the Gmail thread to retrieve.
@@ -567,7 +601,13 @@ async def get_gmail_thread_content(
 @handle_http_errors("list_gmail_labels")
 async def list_gmail_labels(service, ctx: Context, user_google_email: Optional[str] = None):
     """
-    Lists all labels in the user's Gmail account.
+    <description>Lists all Gmail labels including system labels (Inbox, Sent, Drafts) and user-created custom labels, showing label IDs and names for organization and filtering.</description>
+    
+    <use_case>Understanding Gmail organization structure, getting label IDs for message filtering operations, or auditing custom label usage across the Gmail account.</use_case>
+    
+    <limitation>Returns label metadata only - not message counts or label colors. Cannot retrieve labels from other users' accounts or deleted labels.</limitation>
+    
+    <failure_cases>Fails when user lacks Gmail access permissions, during temporary Gmail API outages, or if the Gmail account has been suspended or restricted.</failure_cases>
 
     Args:
         user_google_email (str): The user's Google email address. Optional.

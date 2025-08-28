@@ -30,7 +30,13 @@ async def create_form(
     document_title: Optional[str] = None
 ):
     """
-    Create a new form using the title given in the provided form message in the request.
+    <description>Creates a new blank Google Form with specified title and optional description. Form starts empty without questions - use additional tools to add form fields.</description>
+    
+    <use_case>Creating surveys, feedback forms, event registrations, or data collection forms from scratch. Ideal when you need a clean slate to build custom questionnaires.</use_case>
+    
+    <limitation>Only creates the form container - does not add questions, validation rules, or response settings. Cannot clone existing forms or import questions from templates.</limitation>
+    
+    <failure_cases>Fails if user lacks Google Forms creation permissions, if title exceeds character limits (~100 chars), or if Google Drive storage quota is exceeded.</failure_cases>
 
     Args:
         user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
@@ -78,7 +84,13 @@ async def get_form(
     user_google_email: Optional[str] = None
 ):
     """
-    Get a form.
+    <description>Retrieves complete form structure including title, description, all questions, and response settings. Shows form metadata and question types but not actual response data.</description>
+    
+    <use_case>Inspecting existing forms before modification, understanding form structure for response analysis, or documenting form configurations for compliance audits.</use_case>
+    
+    <limitation>Does not return response data or analytics - only form structure. Cannot retrieve deleted forms or forms without proper access permissions.</limitation>
+    
+    <failure_cases>Fails with invalid form IDs, forms the user cannot access due to sharing restrictions, or forms that have been permanently deleted by the owner.</failure_cases>
 
     Args:
         user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
@@ -137,7 +149,13 @@ async def set_publish_settings(
     require_authentication: bool = False
 ):
     """
-    Updates the publish settings of a form.
+    <description>Configures form visibility and access controls, including template publishing and authentication requirements. Controls who can view and submit responses to the form.</description>
+    
+    <use_case>Setting up public surveys for anonymous feedback, creating secure forms requiring Google sign-in, or publishing template forms for organization-wide reuse.</use_case>
+    
+    <limitation>Cannot control fine-grained permissions or set custom access lists. Authentication requirement applies to all users - cannot mix authenticated and anonymous access.</limitation>
+    
+    <failure_cases>Fails if user lacks form ownership permissions, if form is actively collecting responses that would be affected by access changes, or on Google Workspace domains with restricted publishing policies.</failure_cases>
 
     Args:
         user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
@@ -175,7 +193,13 @@ async def get_form_response(
     user_google_email: Optional[str] = None
 ):
     """
-    Get one response from the form.
+    <description>Retrieves a single form response with all submitted answers, timestamps, and metadata. Shows individual respondent data for detailed analysis or follow-up.</description>
+    
+    <use_case>Investigating specific survey responses, analyzing individual customer feedback, or extracting detailed data for case studies and qualitative research.</use_case>
+    
+    <limitation>Returns only one response at a time - not efficient for bulk analysis. Cannot retrieve responses from anonymous forms where response IDs are not tracked.</limitation>
+    
+    <failure_cases>Fails with invalid response IDs, responses from forms the user cannot access, or responses that have been deleted by form owners.</failure_cases>
 
     Args:
         user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
@@ -231,7 +255,13 @@ async def list_form_responses(
     page_token: Optional[str] = None
 ):
     """
-    List a form's responses.
+    <description>Lists all form responses with summary metadata including submission timestamps and response counts. Provides pagination for forms with many responses (>10-100 responses).</description>
+    
+    <use_case>Getting overview of form response volume, identifying recent submissions for follow-up, or preparing for bulk response analysis with response IDs.</use_case>
+    
+    <limitation>Shows only response metadata, not actual answers - use get_form_response for detailed content. Limited to 100 responses per page requiring pagination for larger datasets.</limitation>
+    
+    <failure_cases>Fails on forms without response collection enabled, forms the user cannot access, or when API rate limits are exceeded with high-volume polling.</failure_cases>
 
     Args:
         user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
