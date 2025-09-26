@@ -30,7 +30,13 @@ async def create_presentation(
     title: str = "Untitled Presentation"
 ):
     """
-    Create a new Google Slides presentation.
+    <description>Creates a new empty Google Slides presentation with a single blank slide. Generates a presentation ready for content addition but contains no slides content initially.</description>
+    
+    <use_case>Starting new presentations for meetings, reports, or educational content. Ideal when building presentations from scratch rather than using templates.</use_case>
+    
+    <limitation>Creates only one blank slide - use batch_update_presentation to add more slides or content. Cannot import slides from other presentations or apply themes during creation.</limitation>
+    
+    <failure_cases>Fails if user lacks Google Slides creation permissions, if title exceeds character limits, or if Google Drive storage quota is exceeded.</failure_cases>
 
     Args:
         user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
@@ -72,7 +78,13 @@ async def get_presentation(
     user_google_email: Optional[str] = None
 ):
     """
-    Get details about a Google Slides presentation.
+    <description>Retrieves presentation metadata including title, slide count, page dimensions, and basic slide structure. Shows presentation overview without detailed slide content.</description>
+    
+    <use_case>Inspecting presentation structure before modification, understanding slide organization for automation, or getting presentation metadata for documentation.</use_case>
+    
+    <limitation>Returns slide structure but not detailed content like text or images. Cannot retrieve presentations without proper access permissions or deleted presentations.</limitation>
+    
+    <failure_cases>Fails with invalid presentation IDs, presentations the user cannot access due to sharing restrictions, or presentations deleted by the owner.</failure_cases>
 
     Args:
         user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
@@ -122,7 +134,13 @@ async def batch_update_presentation(
     user_google_email: Optional[str] = None
 ):
     """
-    Apply batch updates to a Google Slides presentation.
+    <description>Executes multiple presentation modifications in a single atomic operation including adding slides, inserting text, creating shapes, and applying formatting. All changes succeed or fail together.</description>
+    
+    <use_case>Automating slide creation, bulk formatting changes, inserting multiple elements across slides, or applying consistent styling to entire presentations programmatically.</use_case>
+    
+    <limitation>Requires knowledge of Google Slides API request structure. Limited to 500 requests per batch. Cannot undo individual operations - entire batch must be reverted.</limitation>
+    
+    <failure_cases>Fails if any single request in the batch is invalid, if user lacks edit permissions, or if presentation is locked by another user during the operation.</failure_cases>
 
     Args:
         user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
@@ -180,7 +198,13 @@ async def get_page(
     user_google_email: Optional[str] = None
 ):
     """
-    Get details about a specific page (slide) in a presentation.
+    <description>Retrieves detailed information about a specific slide including all page elements (text boxes, shapes, images, tables) and their properties. Shows slide content structure.</description>
+    
+    <use_case>Analyzing slide content before modification, understanding element layout for automation, or extracting specific slide information for processing.</use_case>
+    
+    <limitation>Returns element metadata but not actual text content or image data. Cannot retrieve slides from presentations without proper access permissions.</limitation>
+    
+    <failure_cases>Fails with invalid presentation or slide IDs, slides the user cannot access, or slides that have been deleted from the presentation.</failure_cases>
 
     Args:
         user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.
@@ -244,7 +268,13 @@ async def get_page_thumbnail(
     thumbnail_size: str = "MEDIUM"
 ):
     """
-    Generate a thumbnail URL for a specific page (slide) in a presentation.
+    <description>Generates a downloadable thumbnail image URL for a specific slide in PNG format. Creates visual preview of slide content at specified resolution (SMALL: 200px, MEDIUM: 800px, LARGE: 1600px width).</description>
+    
+    <use_case>Creating slide previews for presentation catalogs, generating thumbnails for slide selection interfaces, or extracting slide images for documentation or reports.</use_case>
+    
+    <limitation>Returns temporary URLs that expire after some time. Cannot generate thumbnails for slides with restricted content or presentations without view permissions.</limitation>
+    
+    <failure_cases>Fails with invalid presentation or slide IDs, slides containing restricted content the user cannot view, or when Google's thumbnail generation service is temporarily unavailable.</failure_cases>
 
     Args:
         user_google_email (Optional[str]): The user's Google email address. If not provided, will be automatically detected.

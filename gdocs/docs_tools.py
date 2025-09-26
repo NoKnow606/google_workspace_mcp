@@ -189,7 +189,13 @@ async def search_docs(
     user_google_email: Optional[str] = None,
 ):
     """
-    Searches for Google Docs by name using Drive API (mimeType filter).
+    <description>Searches for Google Docs by document name using Drive API with Google Docs MIME type filtering. Returns document metadata including IDs, names, modification times, and web view links for up to 10 documents.</description>
+    
+    <use_case>Finding specific Google Docs for content processing, locating documents by partial name matches, or discovering recently modified docs for collaborative editing workflows.</use_case>
+    
+    <limitation>Searches only document titles, not content. Limited to Google Docs format only - excludes Word files or other document formats. Cannot search within document text or comments.</limitation>
+    
+    <failure_cases>Fails with malformed search queries containing special characters, when user lacks Drive access permissions, or if Google Drive API quotas are exceeded.</failure_cases>
 
     Returns:
         str: A formatted list of Google Docs matching the search query.
@@ -231,9 +237,13 @@ async def get_doc_content(
     tab_id: Optional[str] = None,
 ):
     """
-    Retrieves content of a Google Doc or a Drive file (like .docx) identified by document_id.
-    - Native Google Docs: Fetches content via Docs API.
-    - Office files (.docx, etc.) stored in Drive: Downloads via Drive API and extracts text.
+    <description>Extracts full text content from Google Docs (including tabbed documents) and Office files (.docx) stored in Drive. Processes complex document structures, tables, headers/footers, and multiple tabs into readable plain text.</description>
+    
+    <use_case>Extracting document content for analysis, processing multi-tab Google Docs for content migration, or converting Office documents to text for automated workflows.</use_case>
+    
+    <limitation>Returns plain text only - formatting, images, and complex layouts are lost. Limited to documents under 50MB. Cannot process password-protected or heavily corrupted files.</limitation>
+    
+    <failure_cases>Fails with invalid document IDs, documents the user cannot access due to permissions, corrupted Office files, or when specifying invalid tab IDs for tabbed documents.</failure_cases>
     
     Args:
         document_id: The ID of the document to retrieve
@@ -384,7 +394,13 @@ async def list_docs_in_folder(
     page_size: int = 100
 ):
     """
-    Lists Google Docs within a specific Drive folder.
+    <description>Lists all Google Docs within a specific Drive folder showing document names, IDs, modification times, and web view links. Returns up to 100 documents per page with pagination support for large folders.</description>
+    
+    <use_case>Organizing document workflows by folder, bulk processing documents in specific directories, or discovering documents within project folders for content analysis.</use_case>
+    
+    <limitation>Limited to Google Docs format only - excludes Word files or other document types. Shows only immediate folder contents, not recursive subfolder documents. Requires valid folder access permissions.</limitation>
+    
+    <failure_cases>Fails with invalid folder IDs, folders the user cannot access due to sharing restrictions, or when trying to list contents of files instead of folders.</failure_cases>
 
     Returns:
         str: A formatted list of Google Docs in the specified folder.
@@ -417,7 +433,13 @@ async def create_doc(
     user_google_email: Optional[str] = None,
 ):
     """
-    Creates a new Google Doc and optionally inserts initial content.
+    <description>Creates a new Google Docs document with specified title and optional initial plain text content. Document is immediately accessible via web interface and ready for collaborative editing.</description>
+    
+    <use_case>Creating new documents for reports, initializing document templates with starter content, or generating documents programmatically for automated workflows.</use_case>
+    
+    <limitation>Supports only plain text initial content - no formatting, images, or complex structures. Cannot create documents in specific folders during creation - requires separate sharing/moving operations.</limitation>
+    
+    <failure_cases>Fails when user lacks Google Docs creation permissions, if title exceeds character limits, or if Google Drive storage quota is exceeded.</failure_cases>
 
     Returns:
         str: Confirmation message with document ID and link.
