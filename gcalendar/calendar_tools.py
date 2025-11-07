@@ -212,12 +212,12 @@ async def create_event(
     summary: str,
     start_time: str,
     end_time: str,
+    timezone: str,
     user_google_email: Optional[str] = None,
     calendar_id: str = "primary",
     description: Optional[str] = None,
     location: Optional[str] = None,
     attendees: Optional[List[str]] = None,
-    timezone: Optional[str] = None,
     attachments: Optional[List[str]] = None,
 ):
     """

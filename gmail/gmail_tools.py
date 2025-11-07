@@ -222,7 +222,7 @@ async def search_gmail_messages(
     service, ctx: Context, query: str, user_google_email: Optional[str] = None, page_size: int = 10
 ) -> SearchGmailMessagesResponse:
     """
-    <description>Searches Gmail messages using standard Gmail search operators (from:, subject:, has:attachment, etc.) and returns message/thread IDs with web links. Returns up to 10 messages by default for efficient processing.</description>
+    <description>Searches Gmail messages using standard Gmail search operators and returns message/thread IDs with web links. Returns up to 10 messages by default for efficient processing.</description>
 
     <use_case>Finding specific emails for follow-up, locating messages with attachments for processing, or identifying email threads for conversation analysis using Gmail's powerful search syntax.</use_case>
 
