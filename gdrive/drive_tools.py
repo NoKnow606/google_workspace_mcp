@@ -14,6 +14,7 @@ from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 import io
 import httpx
 from fastmcp import Context
+from pydantic import BaseModel
 
 from auth.service_decorator import require_google_service
 from core.utils import extract_office_xml_text, handle_http_errors
@@ -76,6 +77,22 @@ def _build_drive_list_params(
 
     return list_params
 
+
+class DriveFile(BaseModel):
+    name: str
+    id: str
+    mimeType: Optional[str] = None
+    size: Optional[int] = None
+    modifiedTime: Optional[str] = None
+    webViewLink: Optional[str] = None
+
+
+class SearchDriverFilesResponse(BaseModel):
+    files: Optional[List[DriveFile]] = []
+    total: int
+    query: str
+
+
 @server.tool
 @require_google_service("drive", "drive_read")
 @handle_http_errors("search_drive_files")
@@ -88,7 +105,7 @@ async def search_drive_files(
     drive_id: Optional[str] = None,
     include_items_from_all_drives: bool = True,
     corpora: Optional[str] = None,
-):
+)-> SearchDriverFilesResponse:
     """
     <description>Searches files and folders across Google Drive using advanced search operators (name:, type:, owner:, etc.) or full-text content search. Supports both personal Drive and shared drives with up to 1000 results per query.</description>
     
@@ -139,16 +156,34 @@ async def search_drive_files(
     )
     files = results.get('files', [])
     if not files:
-        return f"No files found for '{query}'."
-
-    formatted_files_text_parts = [f"Found {len(files)} files for {user_google_email} matching '{query}':"]
-    for item in files:
-        size_str = f", Size: {item.get('size', 'N/A')}" if 'size' in item else ""
-        formatted_files_text_parts.append(
-            f"- Name: \"{item['name']}\" (ID: {item['id']}, Type: {item['mimeType']}{size_str}, Modified: {item.get('modifiedTime', 'N/A')}) Link: {item.get('webViewLink', '#')}"
+        return SearchDriverFilesResponse(
+            query=query,
+            files=[],
+            total=0
         )
-    text_output = "\n".join(formatted_files_text_parts)
-    return text_output
+
+    return SearchDriverFilesResponse(
+        query=query,
+        total=len(files),
+        files = [DriveFile(
+            name= file.get('name'),
+            id=file.get('id'),
+            mimeType=file.get('mimeType'),
+            size=file.get('size'),
+            modifiedTime=file.get('modifiedTime'),
+            webViewLink=file.get('webViewLink'),
+        ) for file in files],
+    )
+
+    # formatted_files_text_parts = [f"Found {len(files)} files for {user_google_email} matching '{query}':"]
+    # for item in files:
+    #
+    #     size_str = f", Size: {item.get('size', 'N/A')}" if 'size' in item else ""
+    #     formatted_files_text_parts.append(
+    #         f"- Name: \"{item['name']}\" (ID: {item['id']}, Type: {item['mimeType']}{size_str}, Modified: {item.get('modifiedTime', 'N/A')}) Link: {item.get('webViewLink', '#')}"
+    #     )
+    # text_output = "\n".join(formatted_files_text_parts)
+    # return text_output
 
 @server.tool
 @require_google_service("drive", "drive_read")
