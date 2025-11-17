@@ -24,7 +24,8 @@ RUN uv pip install --system --no-cache \
     "mcp[cli]>=1.6.0" \
     sse-starlette>=2.3.3 \
     uvicorn>=0.34.2 \
-    pyjwt>=2.10.1
+    pyjwt>=2.10.1 \
+    markdown>=3.10 \
 
 # Copy application code
 COPY . .
