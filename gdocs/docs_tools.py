@@ -903,7 +903,7 @@ async def create_doc(
     service,
     ctx: Context,
     title: str,
-    content: str = "",
+    content: str,
     user_google_email: Optional[str] = None,
     folder_id: Optional[str] = None,
 ) -> CreateDocResponse:
