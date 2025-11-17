@@ -10,15 +10,16 @@ readme = "README.md"
 keywords = [ "mcp", "google", "workspace", "llm", "ai", "claude", "model", "context", "protocol", "server"]
 requires-python = ">=3.11"
 dependencies = [
- "aiohttp>=3.9.0",
- "fastapi>=0.115.12",
- "fastmcp>=2.3.3",
- "google-api-python-client>=2.168.0",
- "google-auth-httplib2>=0.2.0",
- "google-auth-oauthlib>=1.2.2",
- "httpx>=0.28.1",
- "pyjwt>=2.10.1",
- "tomlkit",
+    "aiohttp>=3.9.0",
+    "fastapi>=0.115.12",
+    "fastmcp>=2.3.3",
+    "google-api-python-client>=2.168.0",
+    "google-auth-httplib2>=0.2.0",
+    "google-auth-oauthlib>=1.2.2",
+    "httpx>=0.28.1",
+    "pyjwt>=2.10.1",
+    "tomlkit",
+    "markdown>=3.10",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",

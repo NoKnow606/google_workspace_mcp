@@ -6,13 +6,14 @@ This module provides MCP tools for interacting with Google Docs API and managing
 import logging
 import asyncio
 import io
+import json
 from typing import List, Optional, Dict, Any, Union, Literal
 from uuid import uuid4
 from pydantic import BaseModel, Field
 
 from mcp import types
 from fastmcp import Context
-from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
+from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload, HttpRequest
 
 # Auth & server utilities
 from auth.service_decorator import require_google_service, require_multiple_services
@@ -661,8 +662,242 @@ async def list_docs_in_folder(
         documents=documents
     )
 
+
+def markdown_to_html(markdown_text: str) -> str:
+    """
+    Convert Markdown text to HTML using the markdown library.
+
+    Args:
+        markdown_text: Markdown formatted text
+
+    Returns:
+        HTML string with styling
+    """
+    try:
+        import markdown
+    except ImportError:
+        raise ImportError(
+            "The 'markdown' library is required for HTML conversion. "
+            "Please install it with: pip install markdown"
+        )
+
+    # Convert markdown to HTML with extensions
+    html_content = markdown.markdown(
+        markdown_text,
+        extensions=[
+            'extra',  # Tables, fenced code, etc.
+            'nl2br',  # Newline to <br>
+            'sane_lists',  # Better list handling
+        ]
+    )
+
+    # Wrap in HTML document with styling
+    html_with_styles = f'''<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    /* Google Docs compatible styles */
+    body {{
+      font-family: Arial, sans-serif;
+      font-size: 11pt;
+      line-height: 1.5;
+    }}
+
+    h1 {{
+      font-size: 20pt;
+      font-weight: bold;
+      margin-top: 20pt;
+      margin-bottom: 10pt;
+    }}
+
+    h2 {{
+      font-size: 16pt;
+      font-weight: bold;
+      margin-top: 18pt;
+      margin-bottom: 8pt;
+    }}
+
+    h3 {{
+      font-size: 14pt;
+      font-weight: bold;
+      margin-top: 16pt;
+      margin-bottom: 6pt;
+    }}
+
+    p, ul, ol, table {{
+      margin-bottom: 10pt;
+    }}
+
+    ul, ol {{
+      padding-left: 30pt;
+    }}
+
+    li {{
+      margin-bottom: 5pt;
+    }}
+
+    a {{
+      color: #1155cc;
+      text-decoration: underline;
+    }}
+
+    code {{
+      font-family: 'Courier New', monospace;
+      background-color: #f5f5f5;
+      padding: 2pt 4pt;
+      border-radius: 3pt;
+    }}
+
+    pre {{
+      background-color: #f5f5f5;
+      padding: 10pt;
+      border-radius: 5pt;
+      overflow-x: auto;
+    }}
+
+    blockquote {{
+      border-left: 3pt solid #ccc;
+      margin-left: 0;
+      padding-left: 15pt;
+      color: #666;
+    }}
+
+    table {{
+      border-collapse: collapse;
+      width: 100%;
+    }}
+
+    th, td {{
+      border: 1pt solid #ddd;
+      padding: 8pt;
+      text-align: left;
+    }}
+
+    th {{
+      background-color: #f5f5f5;
+      font-weight: bold;
+    }}
+
+    hr {{
+      border: none;
+      border-top: 1pt solid #ccc;
+      margin: 20pt 0;
+    }}
+
+    img {{
+      max-width: 100%;
+      height: auto;
+    }}
+  </style>
+</head>
+<body>
+{html_content}
+</body>
+</html>'''
+
+    return html_with_styles
+
+
+async def create_doc_from_html(
+    drive_service,
+    title: str,
+    html_content: str,
+    folder_id: Optional[str] = None
+) -> Dict[str, str]:
+    """
+    Create a Google Doc from HTML content using Drive API multipart upload.
+
+    Args:
+        drive_service: Authenticated Google Drive service
+        title: Document title
+        html_content: HTML content (should be complete HTML document)
+        folder_id: Optional parent folder ID
+
+    Returns:
+        Dict with 'id' and 'webViewLink'
+    """
+    # Prepare metadata
+    metadata = {
+        'name': title,
+        'mimeType': 'application/vnd.google-apps.document'
+    }
+
+    if folder_id:
+        metadata['parents'] = [folder_id]
+
+    # Prepare multipart body
+    boundary = 'boundary_marker'
+
+    # Build multipart request body
+    body_parts = []
+
+    # Part 1: Metadata (JSON)
+    body_parts.append(f'--{boundary}')
+    body_parts.append('Content-Type: application/json; charset=UTF-8')
+    body_parts.append('')
+    body_parts.append(json.dumps(metadata))
+
+    # Part 2: HTML content
+    body_parts.append(f'--{boundary}')
+    body_parts.append('Content-Type: text/html; charset=UTF-8')
+    body_parts.append('')
+    body_parts.append(html_content)
+
+    # Final boundary
+    body_parts.append(f'--{boundary}--')
+
+    # Join with CRLF
+    body = '\r\n'.join(body_parts)
+
+    # Make the request
+    url = 'https://www.googleapis.com/upload/drive/v3/files'
+    params = {
+        'uploadType': 'multipart',
+        'supportsAllDrives': 'true',
+        'fields': 'id,webViewLink'
+    }
+
+    # Create request
+    http = drive_service._http
+    headers = {
+        'Content-Type': f'multipart/related; boundary={boundary}'
+    }
+
+    # Execute request in thread
+    def _execute_upload():
+        import urllib.parse
+        import urllib.request
+
+        # Build full URL
+        full_url = url + '?' + urllib.parse.urlencode(params)
+
+        # Create request
+        req = urllib.request.Request(
+            full_url,
+            data=body.encode('utf-8'),
+            headers=headers,
+            method='POST'
+        )
+
+        # Add authorization header
+        credentials = drive_service._http.credentials
+        credentials.apply(headers)
+        req.headers.update(headers)
+
+        # Execute
+        response = urllib.request.urlopen(req)
+        return json.loads(response.read().decode('utf-8'))
+
+    result = await asyncio.to_thread(_execute_upload)
+
+    logger.info(f"[create_doc_from_html] Created document: {result.get('id')}")
+
+    return result
+
+
 @server.tool
-@require_google_service("docs", "docs_write")
+@require_google_service("drive", "drive_file")
 @handle_http_errors("create_doc")
 async def create_doc(
     service,
@@ -670,51 +905,58 @@ async def create_doc(
     title: str,
     content: str = "",
     user_google_email: Optional[str] = None,
+    folder_id: Optional[str] = None,
 ) -> CreateDocResponse:
     """
-    <description>Creates a new Google Docs document with specified title and optional Markdown formatted content. Automatically parses Markdown syntax including headings, paragraphs, lists, images, and formatting. Document is immediately accessible via web interface and ready for collaborative editing.</description>
+    <description>Creates a new Google Docs document with Markdown content automatically converted to formatted HTML. Uses Drive API multipart upload for efficient one-shot document creation with full formatting support. Document is immediately accessible via web interface.</description>
 
-    <use_case>Creating new documents for reports, initializing document templates with formatted content, converting Markdown documentation to Google Docs, or generating documents programmatically with rich formatting.</use_case>
+    <use_case>Creating formatted documents from Markdown (LLM outputs, reports, documentation). Supports headings, lists, tables, bold, italic, links, code blocks, images, and more. Perfect for automated document generation with rich formatting.</use_case>
 
-    <limitation>Images must be publicly accessible URLs. Complex Markdown features like tables, code blocks, and nested lists may not be fully supported. Cannot create documents in specific folders during creation - requires separate sharing/moving operations.</limitation>
+    <limitation>Requires 'markdown' Python library (install with: pip install markdown). Images must be publicly accessible URLs or base64 encoded. Very large documents (>10MB) may fail.</limitation>
 
-    <failure_cases>Fails when user lacks Google Docs creation permissions, if title exceeds character limits, if Google Drive storage quota is exceeded, or when Markdown contains inaccessible image URLs.</failure_cases>
+    <failure_cases>Fails when user lacks Google Drive write permissions, if title exceeds character limits, if storage quota is exceeded, or if 'markdown' library is not installed.</failure_cases>
 
     Args:
         title: The title of the new document
-        content: Markdown formatted text (supports headings, lists, images, bold, italic, links, etc.)
+        content: Markdown formatted text (supports full Markdown syntax including tables, code blocks, etc.)
         user_google_email: Optional user email for context
+        folder_id: Optional parent folder ID to create document in
 
     Returns:
         CreateDocResponse: Structured response with document creation details.
     """
     logger.info(f"[create_doc] Invoked. Email: '{user_google_email}', Title='{title}', Content length: {len(content)}")
 
-    # Create the document
-    doc = await asyncio.to_thread(service.documents().create(body={'title': title}).execute)
-    doc_id = doc.get('documentId')
+    if not content:
+        # Create empty document using Docs API for backward compatibility
+        # Fall back to basic creation
+        logger.info(f"[create_doc] No content provided, creating empty document")
 
-    # Insert content if provided
-    if content:
-        # Parse Markdown into elements
-        elements = parse_markdown_to_elements(content)
-        logger.info(f"[create_doc] Parsed {len(elements)} elements from Markdown")
+        # We need to import docs service for empty doc creation
+        from auth.google_auth import get_service_with_user_creds
+        docs_service = await get_service_with_user_creds("docs", ["https://www.googleapis.com/auth/documents"], user_google_email)
 
-        # Build requests with styling
-        requests, current_index, images_count = build_requests_from_elements(elements, start_index=1)
+        doc = await asyncio.to_thread(docs_service.documents().create(body={'title': title}).execute)
+        doc_id = doc.get('documentId')
+        link = f"https://docs.google.com/document/d/{doc_id}/edit"
+    else:
+        # Convert Markdown to HTML
+        logger.info(f"[create_doc] Converting Markdown to HTML...")
+        html_content = markdown_to_html(content)
+        logger.info(f"[create_doc] HTML generated ({len(html_content)} characters)")
 
-        # Execute batch update if there are requests
-        if requests:
-            logger.info(f"[create_doc] Executing batch update with {len(requests)} requests")
-            await asyncio.to_thread(
-                service.documents().batchUpdate(
-                    documentId=doc_id,
-                    body={'requests': requests}
-                ).execute
-            )
-            logger.info(f"[create_doc] Inserted {len(elements)} elements ({images_count} images)")
+        # Create document from HTML using Drive API multipart upload
+        logger.info(f"[create_doc] Uploading HTML to create formatted document...")
+        result = await create_doc_from_html(
+            drive_service=service,
+            title=title,
+            html_content=html_content,
+            folder_id=folder_id
+        )
 
-    link = f"https://docs.google.com/document/d/{doc_id}/edit"
+        doc_id = result.get('id')
+        link = result.get('webViewLink', f"https://docs.google.com/document/d/{doc_id}/edit")
+
     msg = f"Created Google Doc '{title}' (ID: {doc_id}) for {user_google_email}. Link: {link}"
     logger.info(f"[create_doc] {msg}")
 
@@ -1153,8 +1395,112 @@ def build_requests_from_elements(elements: List[Dict], start_index: int = 1) -> 
     return requests, current_index, images_count
 
 
+async def append_html_to_doc(
+    drive_service,
+    document_id: str,
+    html_content: str
+) -> Dict[str, Any]:
+    """
+    Append HTML content to an existing Google Doc by exporting, appending, and re-uploading.
+
+    Args:
+        drive_service: Authenticated Google Drive service
+        document_id: ID of the document to append to
+        html_content: HTML content to append (just the body content, not full HTML doc)
+
+    Returns:
+        Dict with update results
+    """
+    # Step 1: Export existing document as HTML
+    logger.info(f"[append_html_to_doc] Exporting document {document_id} as HTML")
+
+    def _export_html():
+        request = drive_service.files().export_media(
+            fileId=document_id,
+            mimeType='text/html'
+        )
+        return request.execute().decode('utf-8')
+
+    existing_html = await asyncio.to_thread(_export_html)
+
+    # Step 2: Parse and append new content
+    # Find the closing body tag and insert before it
+    import re
+
+    # Extract just the body content from html_content
+    body_match = re.search(r'<body>(.*?)</body>', html_content, re.DOTALL)
+    if body_match:
+        new_content = body_match.group(1)
+    else:
+        new_content = html_content
+
+    # Insert new content before closing </body>
+    if '</body>' in existing_html:
+        updated_html = existing_html.replace('</body>', f'{new_content}</body>')
+    else:
+        # If no body tag, just append
+        updated_html = existing_html + new_content
+
+    # Step 3: Re-upload the updated HTML
+    logger.info(f"[append_html_to_doc] Re-uploading updated document")
+
+    boundary = 'boundary_marker'
+    metadata = json.dumps({
+        'mimeType': 'application/vnd.google-apps.document'
+    })
+
+    # Build multipart body
+    body_parts = [
+        f'--{boundary}',
+        'Content-Type: application/json; charset=UTF-8',
+        '',
+        metadata,
+        f'--{boundary}',
+        'Content-Type: text/html; charset=UTF-8',
+        '',
+        updated_html,
+        f'--{boundary}--'
+    ]
+
+    body = '\r\n'.join(body_parts)
+
+    # Upload update
+    def _update_doc():
+        import urllib.parse
+        import urllib.request
+
+        url = f'https://www.googleapis.com/upload/drive/v3/files/{document_id}'
+        params = {'uploadType': 'multipart'}
+        full_url = url + '?' + urllib.parse.urlencode(params)
+
+        headers = {
+            'Content-Type': f'multipart/related; boundary={boundary}'
+        }
+
+        req = urllib.request.Request(
+            full_url,
+            data=body.encode('utf-8'),
+            headers=headers,
+            method='PATCH'
+        )
+
+        # Add authorization
+        credentials = drive_service._http.credentials
+        credentials.apply(headers)
+        req.headers.update(headers)
+
+        response = urllib.request.urlopen(req)
+        return json.loads(response.read().decode('utf-8'))
+
+    result = await asyncio.to_thread(_update_doc)
+
+    logger.info(f"[append_html_to_doc] Document updated successfully")
+
+    return result
+
+
 @server.tool
-@require_google_service("docs", "docs_write")
+@require_google_service("drive", "drive_file")
 @handle_http_errors("insert_markdown_content")
 async def append_content(
     service,
@@ -1165,72 +1511,67 @@ async def append_content(
     user_google_email: Optional[str] = None,
 ) -> InsertMarkdownResponse:
     """
-    <description>Inserts Markdown formatted content into a Google Docs document. Automatically parses Markdown syntax including headings, paragraphs, lists, images, and formatting. Images are inserted inline from their URLs.</description>
+    <description>Appends Markdown formatted content to a Google Docs document. Converts Markdown to HTML and merges with existing document. Supports full Markdown syntax including tables, code blocks, formatting, and images.</description>
 
-    <use_case>Converting Markdown documentation to Google Docs, importing blog posts with images, creating formatted documents from Markdown templates, or automating content migration from Markdown-based systems.</use_case>
+    <use_case>Appending reports to existing documents, adding formatted content from LLM outputs, extending documentation, or automated content updates with rich formatting.</use_case>
 
-    <limitation>Images must be publicly accessible URLs. Complex Markdown features like tables, code blocks, and nested lists may not be fully supported. Does not preserve all Markdown formatting nuances.</limitation>
+    <limitation>Re-uploads entire document (may affect version history). Images must be publicly accessible URLs. Very large documents (>10MB) may be slow. The 'index' parameter is deprecated in this version.</limitation>
 
-    <failure_cases>Fails with invalid document IDs, inaccessible image URLs, documents the user cannot edit, or when Markdown contains unsupported syntax elements.</failure_cases>
+    <failure_cases>Fails with invalid document IDs, documents the user cannot edit, inaccessible image URLs, or if 'markdown' library is not installed.</failure_cases>
 
     Args:
-        document_id: The ID of the document to insert content into
-        content: Markdown formatted text (supports headings, lists, images, etc.)
-        index: Position to insert content (default: end of document)
+        document_id: The ID of the document to append content to
+        content: Markdown formatted text (supports headings, lists, tables, images, code blocks, etc.)
+        index: Deprecated - content is always appended to the end
         user_google_email: Optional user email for context
 
     Returns:
         InsertMarkdownResponse: Structured response with insertion details.
     """
-    logger.info(f"[insert_markdown_content] Invoked. Document ID: '{document_id}', Content length: {len(content)}")
+    logger.info(f"[append_content] Invoked. Document ID: '{document_id}', Content length: {len(content)}")
+
+    if index is not None:
+        logger.warning(f"[append_content] 'index' parameter is deprecated and will be ignored. Content will be appended to the end.")
 
     try:
-        # Get document info to determine insertion index
-        if index is None:
-            doc = await asyncio.to_thread(
-                service.documents().get(documentId=document_id).execute
-            )
-            end_index = doc.get('body', {}).get('content', [{}])[-1].get('endIndex', 1)
-            index = end_index - 1
+        # Convert Markdown to HTML
+        logger.info(f"[append_content] Converting Markdown to HTML...")
+        html_content = markdown_to_html(content)
 
-        logger.info(f"[insert_markdown_content] Insertion index: {index}")
+        # Count elements for response (approximate)
+        import re
+        elements_count = len(re.findall(r'<(h[1-6]|p|ul|ol|table|blockquote|pre|hr)', html_content))
+        images_count = len(re.findall(r'<img', html_content))
 
-        # Parse Markdown into elements
-        elements = parse_markdown_to_elements(content)
-        logger.info(f"[insert_markdown_content] Parsed {len(elements)} elements from Markdown")
+        logger.info(f"[append_content] HTML generated with ~{elements_count} elements, {images_count} images")
 
-        # Build requests with styling
-        requests, current_index, images_count = build_requests_from_elements(elements, start_index=index)
-
-        # Execute batch update
-        logger.info(f"[insert_markdown_content] Executing batch update with {len(requests)} requests")
-
-        result = await asyncio.to_thread(
-            service.documents().batchUpdate(
-                documentId=document_id,
-                body={'requests': requests}
-            ).execute
+        # Append HTML to document
+        logger.info(f"[append_content] Appending content to document...")
+        result = await append_html_to_doc(
+            drive_service=service,
+            document_id=document_id,
+            html_content=html_content
         )
 
         link = f"https://docs.google.com/document/d/{document_id}/edit"
-        msg = f"Successfully inserted Markdown content into document. {len(elements)} elements inserted ({images_count} images)."
+        msg = f"Successfully appended Markdown content to document. ~{elements_count} elements added ({images_count} images)."
 
-        logger.info(f"[insert_markdown_content] {msg}")
+        logger.info(f"[append_content] {msg}")
 
         return InsertMarkdownResponse(
             success=True,
             document_id=document_id,
-            elements_inserted=len(elements),
+            elements_inserted=elements_count,
             images_inserted=images_count,
-            start_index=index,
-            end_index=current_index,
+            start_index=0,  # Not applicable in this implementation
+            end_index=0,    # Not applicable in this implementation
             web_view_link=link,
             message=msg
         )
 
     except Exception as e:
-        error_msg = f"Failed to insert Markdown content: {str(e)}"
-        logger.error(f"[insert_markdown_content] {error_msg}", exc_info=True)
+        error_msg = f"Failed to append Markdown content: {str(e)}"
+        logger.error(f"[append_content] {error_msg}", exc_info=True)
         raise Exception(error_msg)
 
 

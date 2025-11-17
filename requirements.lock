@@ -10,6 +10,12 @@
 #   universal: false
 
 -e file:.
+aiohappyeyeballs==2.6.1
+    # via aiohttp
+aiohttp==3.13.2
+    # via workspace-mcp
+aiosignal==1.4.0
+    # via aiohttp
 annotated-types==0.7.0
     # via pydantic
 anyio==4.9.0
@@ -18,6 +24,7 @@ anyio==4.9.0
     # via sse-starlette
     # via starlette
 attrs==25.3.0
+    # via aiohttp
     # via cyclopts
     # via jsonschema
     # via referencing
@@ -53,6 +60,9 @@ fastapi==0.116.1
     # via workspace-mcp
 fastmcp==2.10.5
     # via workspace-mcp
+frozenlist==1.8.0
+    # via aiohttp
+    # via aiosignal
 google-api-core==2.25.1
     # via google-api-python-client
 google-api-python-client==2.176.0
@@ -88,20 +98,29 @@ idna==3.10
     # via email-validator
     # via httpx
     # via requests
+    # via yarl
 jsonschema==4.24.0
     # via mcp
 jsonschema-specifications==2025.4.1
     # via jsonschema
+markdown==3.10
+    # via workspace-mcp
 markdown-it-py==3.0.0
     # via rich
 mcp==1.11.0
     # via fastmcp
 mdurl==0.1.2
     # via markdown-it-py
+multidict==6.7.0
+    # via aiohttp
+    # via yarl
 oauthlib==3.3.1
     # via requests-oauthlib
 openapi-pydantic==0.5.1
     # via fastmcp
+propcache==0.4.1
+    # via aiohttp
+    # via yarl
 proto-plus==1.26.1
     # via google-api-core
 protobuf==6.31.1
@@ -167,6 +186,7 @@ starlette==0.47.1
 tomlkit==0.13.3
     # via workspace-mcp
 typing-extensions==4.14.1
+    # via aiosignal
     # via anyio
     # via exceptiongroup
     # via fastapi
@@ -184,3 +204,5 @@ urllib3==2.5.0
     # via requests
 uvicorn==0.35.0
     # via mcp
+yarl==1.22.0
+    # via aiohttp
