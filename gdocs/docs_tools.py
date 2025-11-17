@@ -691,6 +691,56 @@ def markdown_to_html(markdown_text: str) -> str:
         ]
     )
 
+    # Fix image sizes using multiple strategies for maximum Google Docs compatibility
+    # Google Docs standard page width is ~468 PT (6.5 inches)
+    import re
+
+    def add_image_size_constraint(match):
+        img_tag = match.group(0)
+
+        # Remove the self-closing slash if present for easier manipulation
+        is_self_closing = img_tag.strip().endswith('/>')
+        if is_self_closing:
+            img_tag = img_tag.rstrip('/>').rstrip()
+        else:
+            img_tag = img_tag.rstrip('>')
+
+        # Strategy 1: HTML width attribute (Google Docs sometimes respects this)
+        if 'width=' not in img_tag.lower():
+            img_tag += ' width="262"'  # ~350pt at 96 DPI = 262px
+
+        # Strategy 2: Inline CSS with PT units (Google Docs native unit)
+        # Use both max-width and explicit width for better compatibility
+        style_parts = [
+            'width: 350pt',           # Explicit width in points
+            'max-width: 350pt',       # Max width constraint
+            'height: auto',           # Maintain aspect ratio
+            'display: block',         # Block-level element
+            'object-fit: contain',    # Ensure image fits within bounds
+        ]
+
+        if 'style=' in img_tag.lower():
+            # Merge with existing style
+            img_tag = re.sub(
+                r'style=["\']([^"\']*)["\']',
+                lambda m: f'style="{m.group(1).rstrip(";")}; {"; ".join(style_parts)}"',
+                img_tag,
+                flags=re.IGNORECASE
+            )
+        else:
+            # Add new style attribute
+            img_tag += f' style="{"; ".join(style_parts)}"'
+
+        # Close the tag properly
+        if is_self_closing:
+            img_tag += ' />'
+        else:
+            img_tag += '>'
+
+        return img_tag
+
+    html_content = re.sub(r'<img[^>]*/?>', add_image_size_constraint, html_content, flags=re.IGNORECASE)
+
     # Wrap in HTML document with styling
     html_with_styles = f'''<!DOCTYPE html>
 <html>
@@ -787,7 +837,9 @@ def markdown_to_html(markdown_text: str) -> str:
 
     img {{
       max-width: 100%;
+      width: auto;
       height: auto;
+      max-height: 600px;
     }}
   </style>
 </head>
@@ -797,6 +849,106 @@ def markdown_to_html(markdown_text: str) -> str:
 </html>'''
 
     return html_with_styles
+
+
+async def fix_image_sizes_in_doc(
+    docs_service,
+    document_id: str,
+    target_width: int = 350,
+    max_threshold: int = 450
+) -> int:
+    """
+    Fix oversized images in a document by resizing them to target width.
+
+    Args:
+        docs_service: Authenticated Docs service
+        document_id: Document ID
+        target_width: Target width in PT for oversized images
+        max_threshold: Only resize images wider than this (in PT)
+
+    Returns:
+        Number of images resized
+    """
+    try:
+        # Get document to check for images
+        doc = await asyncio.to_thread(
+            docs_service.documents().get(
+                documentId=document_id,
+                includeTabsContent=False
+            ).execute
+        )
+
+        inline_objects = doc.get('inlineObjects', {})
+        if not inline_objects:
+            logger.info(f"[fix_image_sizes_in_doc] No images found in document {document_id}")
+            return 0
+
+        # Build resize requests for oversized images
+        requests = []
+        for img_id, img_obj in inline_objects.items():
+            props = img_obj.get('inlineObjectProperties', {})
+            embedded = props.get('embeddedObject', {})
+            size = embedded.get('size', {})
+
+            width = size.get('width', {})
+            height = size.get('height', {})
+
+            width_magnitude = width.get('magnitude')
+            width_unit = width.get('unit')
+            height_magnitude = height.get('magnitude')
+
+            if not width_magnitude or width_unit != 'PT':
+                continue
+
+            # Check if resize is needed
+            if width_magnitude > max_threshold:
+                # Calculate new dimensions maintaining aspect ratio
+                aspect_ratio = height_magnitude / width_magnitude if height_magnitude else 1
+                new_width = target_width
+                new_height = new_width * aspect_ratio
+
+                logger.info(f"[fix_image_sizes_in_doc] Resizing image {img_id}: {width_magnitude:.0f}x{height_magnitude:.0f} PT -> {new_width}x{new_height:.0f} PT")
+
+                requests.append({
+                    'updateInlineObjectProperties': {
+                        'objectId': img_id,
+                        'inlineObjectProperties': {
+                            'embeddedObject': {
+                                'size': {
+                                    'width': {
+                                        'magnitude': new_width,
+                                        'unit': 'PT'
+                                    },
+                                    'height': {
+                                        'magnitude': new_height,
+                                        'unit': 'PT'
+                                    }
+                                }
+                            }
+                        },
+                        'fields': 'embeddedObject.size'
+                    }
+                })
+
+        # Execute batch update if there are changes
+        if requests:
+            logger.info(f"[fix_image_sizes_in_doc] Applying {len(requests)} resize operations")
+            await asyncio.to_thread(
+                docs_service.documents().batchUpdate(
+                    documentId=document_id,
+                    body={'requests': requests}
+                ).execute
+            )
+            logger.info(f"[fix_image_sizes_in_doc] Successfully resized {len(requests)} image(s)")
+            return len(requests)
+        else:
+            logger.info(f"[fix_image_sizes_in_doc] All images are within safe bounds")
+            return 0
+
+    except Exception as e:
+        logger.warning(f"[fix_image_sizes_in_doc] Failed to fix image sizes: {e}")
+        # Don't fail document creation if image resize fails
+        return 0
 
 
 async def create_doc_from_html(
@@ -897,15 +1049,19 @@ async def create_doc_from_html(
 
 
 @server.tool
-@require_google_service("drive", "drive_file")
+@require_multiple_services([
+    {"service_type": "drive", "scopes": "drive_file", "param_name": "drive_service"},
+    {"service_type": "docs", "scopes": "docs_write", "param_name": "docs_service"}
+])
 @handle_http_errors("create_doc")
 async def create_doc(
-    service,
     ctx: Context,
     title: str,
     content: str,
     user_google_email: Optional[str] = None,
     folder_id: Optional[str] = None,
+    drive_service: Optional[Any] = None,
+    docs_service: Optional[Any] = None,
 ) -> CreateDocResponse:
     """
     <description>Creates a new Google Docs document with Markdown content automatically converted to formatted HTML. Uses Drive API multipart upload for efficient one-shot document creation with full formatting support. Document is immediately accessible via web interface.</description>
@@ -929,12 +1085,7 @@ async def create_doc(
 
     if not content:
         # Create empty document using Docs API for backward compatibility
-        # Fall back to basic creation
         logger.info(f"[create_doc] No content provided, creating empty document")
-
-        # We need to import docs service for empty doc creation
-        from auth.google_auth import get_service_with_user_creds
-        docs_service = await get_service_with_user_creds("docs", ["https://www.googleapis.com/auth/documents"], user_google_email)
 
         doc = await asyncio.to_thread(docs_service.documents().create(body={'title': title}).execute)
         doc_id = doc.get('documentId')
@@ -948,7 +1099,7 @@ async def create_doc(
         # Create document from HTML using Drive API multipart upload
         logger.info(f"[create_doc] Uploading HTML to create formatted document...")
         result = await create_doc_from_html(
-            drive_service=service,
+            drive_service=drive_service,
             title=title,
             html_content=html_content,
             folder_id=folder_id
@@ -956,6 +1107,10 @@ async def create_doc(
 
         doc_id = result.get('id')
         link = result.get('webViewLink', f"https://docs.google.com/document/d/{doc_id}/edit")
+
+        # Post-processing: Fix oversized images using Docs API
+        logger.info(f"[create_doc] Checking and fixing image sizes...")
+        await fix_image_sizes_in_doc(docs_service, doc_id, target_width=350, max_threshold=450)
 
     msg = f"Created Google Doc '{title}' (ID: {doc_id}) for {user_google_email}. Link: {link}"
     logger.info(f"[create_doc] {msg}")
@@ -1286,13 +1441,15 @@ def build_requests_from_elements(elements: List[Dict], start_index: int = 1) -> 
             title = elem.get('title', elem.get('alt', 'Image'))
 
             # Insert image inline without caption
+            # Google Docs standard page width is ~468 PT (6.5 inches)
+            # Using 300 PT to ensure images fit within page margins
             requests.append({
                 'insertInlineImage': {
                     'location': {'index': current_index},
                     'uri': url,
                     'objectSize': {
                         'width': {
-                            'magnitude': 400,
+                            'magnitude': 300,
                             'unit': 'PT'
                         }
                     }
