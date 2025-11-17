@@ -6,12 +6,13 @@ This module provides MCP tools for interacting with Google Docs API and managing
 import logging
 import asyncio
 import io
-from typing import List, Optional
+from typing import List, Optional, Dict, Any, Union, Literal
 from uuid import uuid4
+from pydantic import BaseModel, Field
 
 from mcp import types
 from fastmcp import Context
-from googleapiclient.http import MediaIoBaseDownload
+from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 
 # Auth & server utilities
 from auth.service_decorator import require_google_service, require_multiple_services
@@ -21,162 +22,326 @@ from core.comments import create_comment_tools
 
 logger = logging.getLogger(__name__)
 
-def process_tabs_recursively(tabs: List, level: int = 0, target_tab_id: Optional[str] = None) -> List[str]:
+# ==================== Pydantic Models for Structured Output ====================
+
+class TextElement(BaseModel):
+    """Represents a text run in a paragraph"""
+    type: Literal["text"] = "text"
+    content: str = Field(description="Text content")
+
+class ImageElement(BaseModel):
+    """Represents an image in a document"""
+    type: Literal["image"] = "image"
+    imageId: str = Field(description="Inline object ID")
+    title: str = Field(description="Image title")
+    description: Optional[str] = Field(default="", description="Image description")
+    contentUri: str = Field(description="Image URL")
+    width: Optional[float] = Field(default=None, description="Image width")
+    height: Optional[float] = Field(default=None, description="Image height")
+    widthUnit: Optional[str] = Field(default=None, description="Width unit (e.g., PT)")
+    heightUnit: Optional[str] = Field(default=None, description="Height unit (e.g., PT)")
+
+class ParagraphBlock(BaseModel):
+    """Represents a paragraph with mixed text and images"""
+    type: Literal["paragraph"] = "paragraph"
+    elements: List[Union[TextElement, ImageElement]] = Field(default_factory=list, description="Paragraph elements")
+
+class TableCell(BaseModel):
+    """Represents a table cell"""
+    content: List[Union[ParagraphBlock, 'TableBlock', 'StructuralBlock']] = Field(default_factory=list, description="Cell content blocks")
+
+class TableRow(BaseModel):
+    """Represents a table row"""
+    cells: List[TableCell] = Field(default_factory=list, description="Table cells")
+
+class TableBlock(BaseModel):
+    """Represents a table"""
+    type: Literal["table"] = "table"
+    rows: List[TableRow] = Field(default_factory=list, description="Table rows")
+
+class StructuralBlock(BaseModel):
+    """Represents structural elements like breaks and rules"""
+    type: Literal["section_break", "page_break", "horizontal_rule", "table_of_contents"] = Field(description="Block type")
+
+class HeaderFooterBlock(BaseModel):
+    """Represents header or footer content"""
+    type: Literal["header", "footer"] = Field(description="Block type")
+    content: List[Union[ParagraphBlock, TableBlock, StructuralBlock]] = Field(default_factory=list, description="Header/footer content")
+
+# Union type for all content blocks
+ContentBlock = Union[ParagraphBlock, TableBlock, StructuralBlock, HeaderFooterBlock]
+
+class TabContent(BaseModel):
+    """Represents a document tab"""
+    tabId: str = Field(description="Tab ID")
+    title: str = Field(description="Tab title")
+    level: int = Field(default=0, description="Nesting level")
+    index: int = Field(description="Tab index")
+    content: List[ContentBlock] = Field(default_factory=list, description="Tab content blocks")
+    childTabs: List['TabContent'] = Field(default_factory=list, description="Child tabs")
+
+class ImageMetadata(BaseModel):
+    """Metadata for an inline image object"""
+    id: str = Field(description="Image object ID")
+    title: str = Field(description="Image title")
+    description: Optional[str] = Field(default="", description="Image description")
+    contentUri: str = Field(description="Image URL")
+    width: Optional[float] = Field(default=None, description="Image width")
+    height: Optional[float] = Field(default=None, description="Image height")
+    widthUnit: Optional[str] = Field(default=None, description="Width unit")
+    heightUnit: Optional[str] = Field(default=None, description="Height unit")
+
+class DocumentMetadata(BaseModel):
+    """Document metadata"""
+    id: str = Field(description="Document ID")
+    title: str = Field(description="Document title")
+    mimeType: str = Field(description="Document MIME type")
+    link: str = Field(description="Document web view link")
+
+class StructuredDocumentContent(BaseModel):
+    """Complete structured document content"""
+    document: DocumentMetadata = Field(description="Document metadata")
+    content: List[ContentBlock] = Field(default_factory=list, description="Document content (for non-tabbed documents)")
+    tabs: List[TabContent] = Field(default_factory=list, description="Document tabs (for tabbed documents)")
+    images: Dict[str, ImageMetadata] = Field(default_factory=dict, description="Image metadata dictionary")
+
+# Update forward references for recursive models
+TabContent.model_rebuild()
+TableCell.model_rebuild()
+
+# ==================== Response Models ====================
+
+class DocReference(BaseModel):
+    """Reference to a Google Docs document"""
+    id: str = Field(description="Document ID")
+    name: str = Field(description="Document name")
+    modified_time: Optional[str] = Field(default=None, description="Last modified time")
+    web_view_link: Optional[str] = Field(default=None, description="Web view link")
+
+class SearchDocsResponse(BaseModel):
+    """Response for document search"""
+    query: str = Field(description="Search query used")
+    total_found: int = Field(description="Number of documents found")
+    documents: List[DocReference] = Field(default_factory=list, description="List of document references")
+
+class ListDocsResponse(BaseModel):
+    """Response for listing documents in a folder"""
+    folder_id: str = Field(description="Folder ID")
+    total_found: int = Field(description="Number of documents found")
+    documents: List[DocReference] = Field(default_factory=list, description="List of document references")
+
+class CreateDocResponse(BaseModel):
+    """Response for document creation"""
+    success: bool = Field(description="Whether the document was created successfully")
+    document_id: str = Field(description="Created document ID")
+    title: str = Field(description="Document title")
+    web_view_link: str = Field(description="Link to view the document")
+    message: str = Field(description="Human-readable confirmation message")
+
+class InsertMarkdownResponse(BaseModel):
+    """Response for inserting Markdown content"""
+    success: bool = Field(description="Whether the operation was successful")
+    document_id: str = Field(description="Document ID")
+    elements_inserted: int = Field(description="Number of elements inserted (paragraphs, images, etc.)")
+    images_inserted: int = Field(description="Number of images inserted")
+    start_index: int = Field(description="Starting index where content was inserted")
+    end_index: int = Field(description="Ending index after insertion")
+    web_view_link: str = Field(description="Link to view the document")
+    message: str = Field(description="Human-readable confirmation message")
+
+# ==================== Helper Functions ====================
+
+def process_tabs_recursively(tabs: List, level: int = 0, target_tab_id: Optional[str] = None, inline_objects: dict = None) -> List[TabContent]:
     """
     Recursively process tabs and their child tabs.
-    
+
     Args:
         tabs: List of tab objects from Google Docs API
         level: Current nesting level for indentation
         target_tab_id: If specified, only process this specific tab ID
-        
+        inline_objects: Dictionary of inline objects (images) from document
+
     Returns:
-        List[str]: List of processed text lines from all tabs (or specific tab)
+        List[TabContent]: List of processed tab objects (Pydantic models)
     """
-    processed_lines: List[str] = []
-    indent = "  " * level  # Indentation based on nesting level
+    processed_tabs: List[TabContent] = []
+    inline_objects = inline_objects or {}
     
     for i, tab in enumerate(tabs):
         tab_properties = tab.get('tabProperties', {})
         tab_title = tab_properties.get('title', f'Tab {i+1}')
         tab_id = tab_properties.get('tabId', 'unknown')
-        
+
         # If target_tab_id is specified, skip tabs that don't match
         if target_tab_id and tab_id != target_tab_id:
             # Still check child tabs recursively
             child_tabs = tab.get('childTabs', [])
             if child_tabs:
-                child_lines = process_tabs_recursively(child_tabs, level + 1, target_tab_id)
-                processed_lines.extend(child_lines)
-            
+                child_tab_results = process_tabs_recursively(child_tabs, level + 1, target_tab_id, inline_objects)
+                processed_tabs.extend(child_tab_results)
+
             nested_tabs = tab.get('tabs', [])
             if nested_tabs:
-                nested_lines = process_tabs_recursively(nested_tabs, level + 1, target_tab_id)
-                processed_lines.extend(nested_lines)
+                nested_tab_results = process_tabs_recursively(nested_tabs, level + 1, target_tab_id, inline_objects)
+                processed_tabs.extend(nested_tab_results)
             continue
-        
+
         logger.info(f"[process_tabs_recursively] Processing tab at level {level}: '{tab_title}' (ID: {tab_id})")
-        processed_lines.append(f"\n{indent}=== TAB {i+1}: {tab_title} (ID: {tab_id}) ===\n")
-        
+
         # Process document content for this tab
+        content_blocks: List[ContentBlock] = []
         document_tab = tab.get('documentTab', {})
         if document_tab:
             tab_body = document_tab.get('body', {})
             if tab_body:
                 tab_content = tab_body.get('content', [])
                 logger.info(f"[process_tabs_recursively] Tab {i} has {len(tab_content)} content elements")
-                
+
                 if tab_content:
-                    tab_processed_content = process_structural_elements(tab_content)
-                    # Add indentation to content lines
-                    for line in tab_processed_content:
-                        processed_lines.append(f"{indent}{line}")
-                else:
-                    processed_lines.append(f"{indent}[EMPTY TAB CONTENT]\n")
-            else:
-                processed_lines.append(f"{indent}[NO BODY CONTENT]\n")
-        else:
-            processed_lines.append(f"{indent}[NO DOCUMENT TAB CONTENT]\n")
-        
+                    content_blocks = process_structural_elements(tab_content, inline_objects)
+
         # Process child tabs recursively
+        child_tab_list: List[TabContent] = []
         child_tabs = tab.get('childTabs', [])
         if child_tabs:
             logger.info(f"[process_tabs_recursively] Tab '{tab_title}' has {len(child_tabs)} child tabs")
-            processed_lines.append(f"{indent}--- CHILD TABS ---\n")
-            processed_lines.extend(process_tabs_recursively(child_tabs, level + 1, target_tab_id))
-            processed_lines.append(f"{indent}--- END CHILD TABS ---\n")
-        
+            child_tab_list = process_tabs_recursively(child_tabs, level + 1, target_tab_id, inline_objects)
+
         # Also check for nested tabs in different structure
         nested_tabs = tab.get('tabs', [])
         if nested_tabs:
             logger.info(f"[process_tabs_recursively] Tab '{tab_title}' has {len(nested_tabs)} nested tabs")
-            processed_lines.append(f"{indent}--- NESTED TABS ---\n")
-            processed_lines.extend(process_tabs_recursively(nested_tabs, level + 1, target_tab_id))
-            processed_lines.append(f"{indent}--- END NESTED TABS ---\n")
-    
-    return processed_lines
+            nested_tab_results = process_tabs_recursively(nested_tabs, level + 1, target_tab_id, inline_objects)
+            child_tab_list.extend(nested_tab_results)
 
-def process_structural_elements(elements: List) -> List[str]:
+        # Create TabContent object
+        tab_obj = TabContent(
+            tabId=tab_id,
+            title=tab_title,
+            level=level,
+            index=i + 1,
+            content=content_blocks,
+            childTabs=child_tab_list
+        )
+
+        processed_tabs.append(tab_obj)
+
+    return processed_tabs
+
+def process_structural_elements(elements: List, inline_objects: dict = None) -> List[ContentBlock]:
     """
     Process various types of structural elements in a Google Doc.
-    
+
     Args:
         elements: List of structural elements from Google Docs API
-        
+        inline_objects: Dictionary of inline objects (images) from document
+
     Returns:
-        List[str]: List of processed text lines
+        List[ContentBlock]: List of processed content blocks (Pydantic models)
     """
-    processed_lines: List[str] = []
-    
+    processed_content: List[ContentBlock] = []
+    inline_objects = inline_objects or {}
+
     for element in elements:
         if 'paragraph' in element:
             # Handle paragraph elements
             paragraph = element.get('paragraph', {})
             para_elements = paragraph.get('elements', [])
-            current_line_text = ""
-            
+
+            para_elem_list: List[Union[TextElement, ImageElement]] = []
+
             for pe in para_elements:
+                # Handle text runs
                 text_run = pe.get('textRun', {})
                 if text_run and 'content' in text_run:
-                    current_line_text += text_run['content']
-            
-            if current_line_text.strip():
-                processed_lines.append(current_line_text)
+                    para_elem_list.append(TextElement(
+                        type='text',
+                        content=text_run['content']
+                    ))
+
+                # Handle inline objects (images)
+                inline_object_element = pe.get('inlineObjectElement', {})
+                if inline_object_element:
+                    inline_object_id = inline_object_element.get('inlineObjectId')
+                    if inline_object_id and inline_object_id in inline_objects:
+                        inline_obj = inline_objects[inline_object_id]
+                        inline_obj_props = inline_obj.get('inlineObjectProperties', {})
+                        embedded_obj = inline_obj_props.get('embeddedObject', {})
+
+                        # Get image size if available
+                        size = embedded_obj.get('size', {})
+                        width = size.get('width', {})
+                        height = size.get('height', {})
+
+                        para_elem_list.append(ImageElement(
+                            type='image',
+                            imageId=inline_object_id,
+                            title=embedded_obj.get('title', 'Untitled Image'),
+                            description=embedded_obj.get('description', ''),
+                            contentUri=embedded_obj.get('imageProperties', {}).get('contentUri', ''),
+                            width=width.get('magnitude') if width else None,
+                            height=height.get('magnitude') if height else None,
+                            widthUnit=width.get('unit') if width else None,
+                            heightUnit=height.get('unit') if height else None
+                        ))
+
+            if para_elem_list:
+                processed_content.append(ParagraphBlock(
+                    type='paragraph',
+                    elements=para_elem_list
+                ))
                 
         elif 'table' in element:
             # Handle table elements
             table = element.get('table', {})
-            processed_lines.append("\n--- TABLE ---\n")
-            
             table_rows = table.get('tableRows', [])
+
+            rows: List[TableRow] = []
+
             for row in table_rows:
                 row_cells = row.get('tableCells', [])
-                cell_texts = []
-                
+                cells: List[TableCell] = []
+
                 for cell in row_cells:
                     cell_content = cell.get('content', [])
-                    cell_text = "".join(process_structural_elements(cell_content))
-                    cell_texts.append(cell_text.strip())
-                
-                if any(cell_texts):  # Only add row if it has content
-                    processed_lines.append(" | ".join(cell_texts) + "\n")
-            
-            processed_lines.append("--- END TABLE ---\n")
-            
+                    cell_blocks = process_structural_elements(cell_content, inline_objects)
+                    cells.append(TableCell(content=cell_blocks))
+
+                if cells:
+                    rows.append(TableRow(cells=cells))
+
+            if rows:
+                processed_content.append(TableBlock(type='table', rows=rows))
+
         elif 'sectionBreak' in element:
-            # Handle section breaks
-            processed_lines.append("\n--- SECTION BREAK ---\n")
-            
+            processed_content.append(StructuralBlock(type='section_break'))
+
         elif 'tableOfContents' in element:
-            # Handle table of contents
-            processed_lines.append("\n--- TABLE OF CONTENTS ---\n")
-            
+            processed_content.append(StructuralBlock(type='table_of_contents'))
+
         elif 'pageBreak' in element:
-            # Handle page breaks
-            processed_lines.append("\n--- PAGE BREAK ---\n")
-            
+            processed_content.append(StructuralBlock(type='page_break'))
+
         elif 'horizontalRule' in element:
-            # Handle horizontal rules
-            processed_lines.append("\n--- HORIZONTAL RULE ---\n")
-            
+            processed_content.append(StructuralBlock(type='horizontal_rule'))
+
         elif 'footerContent' in element:
-            # Handle footer content
-            processed_lines.append("\n--- FOOTER ---\n")
             footer_content = element.get('footerContent', {}).get('content', [])
-            processed_lines.extend(process_structural_elements(footer_content))
-            processed_lines.append("--- END FOOTER ---\n")
-            
+            footer_blocks = process_structural_elements(footer_content, inline_objects)
+            processed_content.append(HeaderFooterBlock(
+                type='footer',
+                content=footer_blocks
+            ))
+
         elif 'headerContent' in element:
-            # Handle header content
-            processed_lines.append("\n--- HEADER ---\n")
             header_content = element.get('headerContent', {}).get('content', [])
-            processed_lines.extend(process_structural_elements(header_content))
-            processed_lines.append("--- END HEADER ---\n")
-            
-        # Add more element types as needed
-        # 'pageBreak', 'horizontalRule', etc.
-    
-    return processed_lines
+            header_blocks = process_structural_elements(header_content, inline_objects)
+            processed_content.append(HeaderFooterBlock(
+                type='header',
+                content=header_blocks
+            ))
+
+    return processed_content
 
 @server.tool
 @require_google_service("drive", "drive_read")
@@ -187,18 +352,18 @@ async def search_docs(
     query: str,
     page_size: int = 10,
     user_google_email: Optional[str] = None,
-):
+) -> SearchDocsResponse:
     """
     <description>Searches for Google Docs by document name using Drive API with Google Docs MIME type filtering. Returns document metadata including IDs, names, modification times, and web view links for up to 10 documents.</description>
-    
+
     <use_case>Finding specific Google Docs for content processing, locating documents by partial name matches, or discovering recently modified docs for collaborative editing workflows.</use_case>
-    
+
     <limitation>Searches only document titles, not content. Limited to Google Docs format only - excludes Word files or other document formats. Cannot search within document text or comments.</limitation>
-    
+
     <failure_cases>Fails with malformed search queries containing special characters, when user lacks Drive access permissions, or if Google Drive API quotas are exceeded.</failure_cases>
 
     Returns:
-        str: A formatted list of Google Docs matching the search query.
+        SearchDocsResponse: Structured search results with document references.
     """
     logger.info(f"[search_docs] Email={user_google_email}, Query='{query}'")
 
@@ -212,15 +377,22 @@ async def search_docs(
         ).execute
     )
     files = response.get('files', [])
-    if not files:
-        return f"No Google Docs found matching '{query}'."
 
-    output = [f"Found {len(files)} Google Docs matching '{query}':"]
-    for f in files:
-        output.append(
-            f"- {f['name']} (ID: {f['id']}) Modified: {f.get('modifiedTime')} Link: {f.get('webViewLink')}"
+    documents = [
+        DocReference(
+            id=f['id'],
+            name=f['name'],
+            modified_time=f.get('modifiedTime'),
+            web_view_link=f.get('webViewLink')
         )
-    return "\n".join(output)
+        for f in files
+    ]
+
+    return SearchDocsResponse(
+        query=query,
+        total_found=len(files),
+        documents=documents
+    )
 
 @server.tool
 @require_multiple_services([
@@ -235,23 +407,23 @@ async def get_doc_content(
     document_id: str,
     user_google_email: Optional[str] = None,
     tab_id: Optional[str] = None,
-):
+) -> StructuredDocumentContent:
     """
-    <description>Extracts full text content from Google Docs (including tabbed documents) and Office files (.docx) stored in Drive. Processes complex document structures, tables, headers/footers, and multiple tabs into readable plain text.</description>
-    
-    <use_case>Extracting document content for analysis, processing multi-tab Google Docs for content migration, or converting Office documents to text for automated workflows.</use_case>
-    
-    <limitation>Returns plain text only - formatting, images, and complex layouts are lost. Limited to documents under 50MB. Cannot process password-protected or heavily corrupted files.</limitation>
-    
+    <description>Extracts structured content from Google Docs (including tabbed documents) and Office files (.docx) stored in Drive. Returns structured document data with complete document structure, image metadata, tables, and all content elements preserved.</description>
+
+    <use_case>Extracting document content for programmatic processing, analyzing multi-tab Google Docs structure, parsing tables and images, or building automated document workflows with full access to document metadata.</use_case>
+
+    <limitation>Returns structured data which may be verbose for large documents. Limited to documents under 50MB. Cannot process password-protected or heavily corrupted files. Images must be accessible via provided URLs.</limitation>
+
     <failure_cases>Fails with invalid document IDs, documents the user cannot access due to permissions, corrupted Office files, or when specifying invalid tab IDs for tabbed documents.</failure_cases>
-    
+
     Args:
         document_id: The ID of the document to retrieve
         user_google_email: Optional user email for context
         tab_id: Optional tab ID to retrieve content from a specific tab only
 
     Returns:
-        str: The document content with metadata header.
+        StructuredDocumentContent: Structured document content including metadata, content blocks, tabs, and images.
     """
     logger.info(f"[get_doc_content] Invoked. Document/File ID: '{document_id}' for user '{user_google_email}', tab_id: '{tab_id}'")
 
@@ -279,7 +451,11 @@ async def get_doc_content(
             ).execute
         )
         logger.info(f"[get_doc_content] Processing as native Google Doc.")
-        
+
+        # Extract inline objects (images) from the document
+        inline_objects = doc_data.get('inlineObjects', {})
+        logger.info(f"[get_doc_content] Found {len(inline_objects)} inline objects (images)")
+
         # Process tabs if they exist
         tabs = doc_data.get('tabs', [])
         logger.info(f"[get_doc_content] Found {len(tabs)} tabs")
@@ -311,36 +487,73 @@ async def get_doc_content(
                     else:
                         logger.info(f"[get_doc_content] Tab {i} has no body")
         
-        processed_text_lines: List[str] = []
-        
+        # Build image metadata dictionary using Pydantic models
+        images_metadata: Dict[str, ImageMetadata] = {}
+        for img_id, img_obj in inline_objects.items():
+            img_props = img_obj.get('inlineObjectProperties', {})
+            embedded = img_props.get('embeddedObject', {})
+            img_size = embedded.get('size', {})
+
+            images_metadata[img_id] = ImageMetadata(
+                id=img_id,
+                title=embedded.get('title', 'Untitled Image'),
+                description=embedded.get('description', ''),
+                contentUri=embedded.get('imageProperties', {}).get('contentUri', ''),
+                width=img_size.get('width', {}).get('magnitude'),
+                height=img_size.get('height', {}).get('magnitude'),
+                widthUnit=img_size.get('width', {}).get('unit'),
+                heightUnit=img_size.get('height', {}).get('unit')
+            )
+
+        # Build document metadata
+        doc_metadata = DocumentMetadata(
+            id=document_id,
+            title=file_name,
+            mimeType=mime_type,
+            link=web_view_link
+        )
+
+        # Process document content
+        content_list: List[ContentBlock] = []
+        tabs_list: List[TabContent] = []
+
         if tabs:
-            # Document has tabs - process all tabs recursively or filter by tab_id
+            # Process tabs
             if tab_id:
                 logger.info(f"[get_doc_content] Processing specific tab_id '{tab_id}' from {len(tabs)} tabs")
-                processed_text_lines.extend(process_tabs_recursively(tabs, 0, tab_id))
-                # Check if we found any content for the specified tab_id
-                if not processed_text_lines:
+                processed_tabs = process_tabs_recursively(tabs, 0, tab_id, inline_objects)
+                if not processed_tabs:
                     logger.warning(f"[get_doc_content] No content found for tab_id '{tab_id}'")
-                    return f'File: "{file_name}" (ID: {document_id}, Type: {mime_type})\nLink: {web_view_link}\n\n--- ERROR ---\nNo tab found with tab_id "{tab_id}".'
+                    raise ValueError(f'No tab found with tab_id "{tab_id}"')
+                tabs_list = processed_tabs
             else:
                 logger.info(f"[get_doc_content] Processing all {len(tabs)} tabs recursively")
-                processed_text_lines.extend(process_tabs_recursively(tabs, 0))
+                tabs_list = process_tabs_recursively(tabs, 0, None, inline_objects)
         else:
-            # Document without tabs - process body content directly
+            # Process body content directly
             if tab_id:
                 logger.warning(f"[get_doc_content] tab_id '{tab_id}' specified but document has no tabs")
-                return f'File: "{file_name}" (ID: {document_id}, Type: {mime_type})\nLink: {web_view_link}\n\n--- ERROR ---\nSpecified tab_id "{tab_id}" but document has no tabs.'
+                raise ValueError(f'Specified tab_id "{tab_id}" but document has no tabs')
             body_elements = doc_data.get('body', {}).get('content', [])
-            processed_text_lines.extend(process_structural_elements(body_elements))
-            
-        body_text = "".join(processed_text_lines)
+            content_list = process_structural_elements(body_elements, inline_objects)
+
+        # Build StructuredDocumentContent with Pydantic model
+        structured_doc = StructuredDocumentContent(
+            document=doc_metadata,
+            content=content_list,
+            tabs=tabs_list,
+            images=images_metadata
+        )
+
+        # Return the Pydantic model directly
+        return structured_doc
     else:
         logger.info(f"[get_doc_content] Processing as Drive file (e.g., .docx, other). MimeType: {mime_type}")
-        
+
         # tab_id is not supported for non-Google Docs files
         if tab_id:
             logger.warning(f"[get_doc_content] tab_id '{tab_id}' specified but not supported for non-Google Docs files")
-            return f'File: "{file_name}" (ID: {document_id}, Type: {mime_type})\nLink: {web_view_link}\n\n--- ERROR ---\ntab_id is not supported for non-Google Docs files.'
+            raise ValueError(f'tab_id is not supported for non-Google Docs files (File: "{file_name}", Type: {mime_type})')
 
         export_mime_type_map = {
                 # Example: "application/vnd.google-apps.spreadsheet"z: "text/csv",
@@ -376,12 +589,27 @@ async def get_doc_content(
                     f"{len(file_content_bytes)} bytes]"
                 )
 
-    header = (
-        f'File: "{file_name}" (ID: {document_id}, Type: {mime_type})\n'
-        f'Link: {web_view_link}\n\n--- CONTENT ---\n'
+    # Return structured model for non-Google Docs files using Pydantic models
+    doc_metadata = DocumentMetadata(
+        id=document_id,
+        title=file_name,
+        mimeType=mime_type,
+        link=web_view_link
     )
-    print(body_text)
-    return header + body_text
+
+    paragraph = ParagraphBlock(
+        type='paragraph',
+        elements=[TextElement(type='text', content=body_text)]
+    )
+
+    structured_doc = StructuredDocumentContent(
+        document=doc_metadata,
+        content=[paragraph],
+        tabs=[],
+        images={}
+    )
+
+    return structured_doc
 
 @server.tool
 @require_google_service("drive", "drive_read")
@@ -392,35 +620,46 @@ async def list_docs_in_folder(
     user_google_email: Optional[str] = None,
     folder_id: str = 'root',
     page_size: int = 100
-):
+) -> ListDocsResponse:
     """
     <description>Lists all Google Docs within a specific Drive folder showing document names, IDs, modification times, and web view links. Returns up to 100 documents per page with pagination support for large folders.</description>
-    
+
     <use_case>Organizing document workflows by folder, bulk processing documents in specific directories, or discovering documents within project folders for content analysis.</use_case>
-    
+
     <limitation>Limited to Google Docs format only - excludes Word files or other document types. Shows only immediate folder contents, not recursive subfolder documents. Requires valid folder access permissions.</limitation>
-    
+
     <failure_cases>Fails with invalid folder IDs, folders the user cannot access due to sharing restrictions, or when trying to list contents of files instead of folders.</failure_cases>
 
     Returns:
-        str: A formatted list of Google Docs in the specified folder.
+        ListDocsResponse: Structured list of documents in the folder.
     """
     logger.info(f"[list_docs_in_folder] Invoked. Email: '{user_google_email}', Folder ID: '{folder_id}'")
 
     rsp = await asyncio.to_thread(
         service.files().list(
+            
             q=f"'{folder_id}' in parents and mimeType='application/vnd.google-apps.document' and trashed=false",
             pageSize=page_size,
             fields="files(id, name, modifiedTime, webViewLink)"
         ).execute
     )
     items = rsp.get('files', [])
-    if not items:
-        return f"No Google Docs found in folder '{folder_id}'."
-    out = [f"Found {len(items)} Docs in folder '{folder_id}':"]
-    for f in items:
-        out.append(f"- {f['name']} (ID: {f['id']}) Modified: {f.get('modifiedTime')} Link: {f.get('webViewLink')}")
-    return "\n".join(out)
+
+    documents = [
+        DocReference(
+            id=f['id'],
+            name=f['name'],
+            modified_time=f.get('modifiedTime'),
+            web_view_link=f.get('webViewLink')
+        )
+        for f in items
+    ]
+
+    return ListDocsResponse(
+        folder_id=folder_id,
+        total_found=len(items),
+        documents=documents
+    )
 
 @server.tool
 @require_google_service("docs", "docs_write")
@@ -429,32 +668,479 @@ async def create_doc(
     service,
     ctx: Context,
     title: str,
-    content: str,
+    content: str = "",
     user_google_email: Optional[str] = None,
-):
+) -> CreateDocResponse:
     """
-    <description>Creates a new Google Docs document with specified title and optional initial plain text content. Document is immediately accessible via web interface and ready for collaborative editing.</description>
-    
-    <use_case>Creating new documents for reports, initializing document templates with starter content, or generating documents programmatically for automated workflows.</use_case>
-    
-    <limitation>Supports only plain text initial content - no formatting, images, or complex structures. Cannot create documents in specific folders during creation - requires separate sharing/moving operations.</limitation>
-    
-    <failure_cases>Fails when user lacks Google Docs creation permissions, if title exceeds character limits, or if Google Drive storage quota is exceeded.</failure_cases>
+    <description>Creates a new Google Docs document with specified title and optional Markdown formatted content. Automatically parses Markdown syntax including headings, paragraphs, lists, images, and formatting. Document is immediately accessible via web interface and ready for collaborative editing.</description>
+
+    <use_case>Creating new documents for reports, initializing document templates with formatted content, converting Markdown documentation to Google Docs, or generating documents programmatically with rich formatting.</use_case>
+
+    <limitation>Images must be publicly accessible URLs. Complex Markdown features like tables, code blocks, and nested lists may not be fully supported. Cannot create documents in specific folders during creation - requires separate sharing/moving operations.</limitation>
+
+    <failure_cases>Fails when user lacks Google Docs creation permissions, if title exceeds character limits, if Google Drive storage quota is exceeded, or when Markdown contains inaccessible image URLs.</failure_cases>
+
+    Args:
+        title: The title of the new document
+        content: Markdown formatted text (supports headings, lists, images, bold, italic, links, etc.)
+        user_google_email: Optional user email for context
 
     Returns:
-        str: Confirmation message with document ID and link.
+        CreateDocResponse: Structured response with document creation details.
     """
-    logger.info(f"[create_doc] Invoked. Email: '{user_google_email}', Title='{title}'")
+    logger.info(f"[create_doc] Invoked. Email: '{user_google_email}', Title='{title}', Content length: {len(content)}")
 
+    # Create the document
     doc = await asyncio.to_thread(service.documents().create(body={'title': title}).execute)
     doc_id = doc.get('documentId')
+
+    # Insert content if provided
     if content:
-        requests = [{'insertText': {'location': {'index': 1}, 'text': content}}]
-        await asyncio.to_thread(service.documents().batchUpdate(documentId=doc_id, body={'requests': requests}).execute)
+        # Parse Markdown into elements
+        elements = parse_markdown_to_elements(content)
+        logger.info(f"[create_doc] Parsed {len(elements)} elements from Markdown")
+
+        # Build requests
+        requests = []
+        current_index = 1  # Start at index 1 (after title)
+        images_count = 0
+
+        for elem in elements:
+            elem_type = elem.get('type')
+
+            if elem_type == 'heading':
+                level = elem['level']
+                text = elem['text']
+
+                # Format heading based on level
+                if level == 1:
+                    separator = '=' * 60
+                    formatted_text = f"\n{separator}\n{text}\n{separator}\n\n"
+                elif level == 2:
+                    separator = '-' * 50
+                    formatted_text = f"\n{separator}\n{text}\n{separator}\n\n"
+                else:  # level 3
+                    formatted_text = f"\n### {text}\n\n"
+
+                requests.append({
+                    'insertText': {
+                        'location': {'index': current_index},
+                        'text': formatted_text
+                    }
+                })
+                current_index += len(formatted_text)
+
+            elif elem_type == 'paragraph':
+                text = elem['text']
+                paragraph_text = text + '\n\n'
+                requests.append({
+                    'insertText': {
+                        'location': {'index': current_index},
+                        'text': paragraph_text
+                    }
+                })
+                current_index += len(paragraph_text)
+
+            elif elem_type == 'image':
+                url = elem['url']
+                title_text = elem.get('title', elem.get('alt', 'Image'))
+
+                # Insert image caption
+                caption_text = f"[图片: {title_text}]\n"
+                requests.append({
+                    'insertText': {
+                        'location': {'index': current_index},
+                        'text': caption_text
+                    }
+                })
+                current_index += len(caption_text)
+
+                # Insert image
+                requests.append({
+                    'insertInlineImage': {
+                        'location': {'index': current_index},
+                        'uri': url,
+                        'objectSize': {
+                            'width': {
+                                'magnitude': 400,  # Default width
+                                'unit': 'PT'
+                            }
+                        }
+                    }
+                })
+                current_index += 1  # Image占1个字符
+                images_count += 1
+
+                # Add newline after image
+                requests.append({
+                    'insertText': {
+                        'location': {'index': current_index},
+                        'text': '\n\n'
+                    }
+                })
+                current_index += 2
+
+            elif elem_type == 'list':
+                items = elem['items']
+                ordered = elem['ordered']
+
+                list_text = ''
+                for i, item in enumerate(items, 1):
+                    prefix = f"{i}. " if ordered else "• "
+                    list_text += f"{prefix}{item}\n"
+                list_text += '\n'
+
+                requests.append({
+                    'insertText': {
+                        'location': {'index': current_index},
+                        'text': list_text
+                    }
+                })
+                current_index += len(list_text)
+
+            elif elem_type == 'divider':
+                divider_text = '\n' + '─' * 60 + '\n\n'
+                requests.append({
+                    'insertText': {
+                        'location': {'index': current_index},
+                        'text': divider_text
+                    }
+                })
+                current_index += len(divider_text)
+
+        # Execute batch update if there are requests
+        if requests:
+            logger.info(f"[create_doc] Executing batch update with {len(requests)} requests")
+            await asyncio.to_thread(
+                service.documents().batchUpdate(
+                    documentId=doc_id,
+                    body={'requests': requests}
+                ).execute
+            )
+            logger.info(f"[create_doc] Inserted {len(elements)} elements ({images_count} images)")
+
     link = f"https://docs.google.com/document/d/{doc_id}/edit"
     msg = f"Created Google Doc '{title}' (ID: {doc_id}) for {user_google_email}. Link: {link}"
-    logger.info(f"Successfully created Google Doc '{title}' (ID: {doc_id}) for {user_google_email}. Link: {link}")
-    return msg
+    logger.info(f"[create_doc] {msg}")
+
+    return CreateDocResponse(
+        success=True,
+        document_id=doc_id,
+        title=title,
+        web_view_link=link,
+        message=msg
+    )
+
+
+def parse_markdown_to_elements(markdown_text: str) -> List[Dict]:
+    """
+    Parse Markdown text into document elements.
+
+    Supports:
+    - Headings (# H1, ## H2, ### H3)
+    - Paragraphs
+    - Lists (- or * for unordered, 1. for ordered)
+    - Images (![alt](url))
+    - Bold (**text** or __text__)
+    - Italic (*text* or _text_)
+    - Links ([text](url))
+
+    Args:
+        markdown_text: Markdown formatted text
+
+    Returns:
+        List of elements with type and content
+    """
+    import re
+
+    elements = []
+    lines = markdown_text.split('\n')
+    i = 0
+
+    while i < len(lines):
+        line = lines[i]
+        stripped = line.strip()
+
+        # Skip empty lines
+        if not stripped:
+            i += 1
+            continue
+
+        # Heading (# H1, ## H2, ### H3)
+        heading_match = re.match(r'^(#{1,3})\s+(.+)$', stripped)
+        if heading_match:
+            level = len(heading_match.group(1))
+            text = heading_match.group(2)
+            elements.append({
+                'type': 'heading',
+                'level': level,
+                'text': text
+            })
+            i += 1
+            continue
+
+        # Image (![alt](url) or ![alt](url "title"))
+        image_match = re.match(r'^!\[([^\]]*)\]\(([^\s\)]+)(?:\s+"([^"]+)")?\)$', stripped)
+        if image_match:
+            alt_text = image_match.group(1)
+            url = image_match.group(2)
+            title = image_match.group(3) or alt_text
+            elements.append({
+                'type': 'image',
+                'url': url,
+                'alt': alt_text,
+                'title': title
+            })
+            i += 1
+            continue
+
+        # Unordered list (- or *)
+        if re.match(r'^[\-\*]\s+', stripped):
+            list_items = []
+            while i < len(lines) and re.match(r'^[\-\*]\s+', lines[i].strip()):
+                item_text = re.sub(r'^[\-\*]\s+', '', lines[i].strip())
+                list_items.append(item_text)
+                i += 1
+            elements.append({
+                'type': 'list',
+                'ordered': False,
+                'items': list_items
+            })
+            continue
+
+        # Ordered list (1. 2. 3.)
+        if re.match(r'^\d+\.\s+', stripped):
+            list_items = []
+            while i < len(lines) and re.match(r'^\d+\.\s+', lines[i].strip()):
+                item_text = re.sub(r'^\d+\.\s+', '', lines[i].strip())
+                list_items.append(item_text)
+                i += 1
+            elements.append({
+                'type': 'list',
+                'ordered': True,
+                'items': list_items
+            })
+            continue
+
+        # Horizontal rule (---, ***, ___)
+        if re.match(r'^(\-{3,}|\*{3,}|_{3,})$', stripped):
+            elements.append({
+                'type': 'divider'
+            })
+            i += 1
+            continue
+
+        # Regular paragraph - collect consecutive lines
+        paragraph_lines = []
+        while i < len(lines):
+            current = lines[i].strip()
+
+            # Stop at empty line, heading, list, image, or divider
+            if (not current or
+                re.match(r'^#{1,3}\s+', current) or
+                re.match(r'^[\-\*]\s+', current) or
+                re.match(r'^\d+\.\s+', current) or
+                re.match(r'^!\[', current) or
+                re.match(r'^(\-{3,}|\*{3,}|_{3,})$', current)):
+                break
+
+            paragraph_lines.append(current)
+            i += 1
+
+        if paragraph_lines:
+            paragraph_text = ' '.join(paragraph_lines)
+            elements.append({
+                'type': 'paragraph',
+                'text': paragraph_text
+            })
+
+    return elements
+
+
+@server.tool
+@require_google_service("docs", "docs_write")
+@handle_http_errors("insert_markdown_content")
+async def append_content(
+    service,
+    ctx: Context,
+    document_id: str,
+    content: str,
+    index: Optional[int] = None,
+    user_google_email: Optional[str] = None,
+) -> InsertMarkdownResponse:
+    """
+    <description>Inserts Markdown formatted content into a Google Docs document. Automatically parses Markdown syntax including headings, paragraphs, lists, images, and formatting. Images are inserted inline from their URLs.</description>
+
+    <use_case>Converting Markdown documentation to Google Docs, importing blog posts with images, creating formatted documents from Markdown templates, or automating content migration from Markdown-based systems.</use_case>
+
+    <limitation>Images must be publicly accessible URLs. Complex Markdown features like tables, code blocks, and nested lists may not be fully supported. Does not preserve all Markdown formatting nuances.</limitation>
+
+    <failure_cases>Fails with invalid document IDs, inaccessible image URLs, documents the user cannot edit, or when Markdown contains unsupported syntax elements.</failure_cases>
+
+    Args:
+        document_id: The ID of the document to insert content into
+        content: Markdown formatted text (supports headings, lists, images, etc.)
+        index: Position to insert content (default: end of document)
+        user_google_email: Optional user email for context
+
+    Returns:
+        InsertMarkdownResponse: Structured response with insertion details.
+    """
+    logger.info(f"[insert_markdown_content] Invoked. Document ID: '{document_id}', Content length: {len(content)}")
+
+    try:
+        # Get document info to determine insertion index
+        if index is None:
+            doc = await asyncio.to_thread(
+                service.documents().get(documentId=document_id).execute
+            )
+            end_index = doc.get('body', {}).get('content', [{}])[-1].get('endIndex', 1)
+            index = end_index - 1
+
+        logger.info(f"[insert_markdown_content] Insertion index: {index}")
+
+        # Parse Markdown into elements
+        elements = parse_markdown_to_elements(content)
+        logger.info(f"[insert_markdown_content] Parsed {len(elements)} elements from Markdown")
+
+        # Build requests
+        requests = []
+        current_index = index
+        images_count = 0
+
+        for elem in elements:
+            elem_type = elem.get('type')
+
+            if elem_type == 'heading':
+                level = elem['level']
+                text = elem['text']
+
+                # Format heading based on level
+                if level == 1:
+                    separator = '=' * 60
+                    formatted_text = f"\n{separator}\n{text}\n{separator}\n\n"
+                elif level == 2:
+                    separator = '-' * 50
+                    formatted_text = f"\n{separator}\n{text}\n{separator}\n\n"
+                else:  # level 3
+                    formatted_text = f"\n### {text}\n\n"
+
+                requests.append({
+                    'insertText': {
+                        'location': {'index': current_index},
+                        'text': formatted_text
+                    }
+                })
+                current_index += len(formatted_text)
+
+            elif elem_type == 'paragraph':
+                text = elem['text']
+                paragraph_text = text + '\n\n'
+                requests.append({
+                    'insertText': {
+                        'location': {'index': current_index},
+                        'text': paragraph_text
+                    }
+                })
+                current_index += len(paragraph_text)
+
+            elif elem_type == 'image':
+                url = elem['url']
+                title = elem.get('title', elem.get('alt', 'Image'))
+
+                # Insert image caption
+                caption_text = f"[图片: {title}]\n"
+                requests.append({
+                    'insertText': {
+                        'location': {'index': current_index},
+                        'text': caption_text
+                    }
+                })
+                current_index += len(caption_text)
+
+                # Insert image
+                requests.append({
+                    'insertInlineImage': {
+                        'location': {'index': current_index},
+                        'uri': url,
+                        'objectSize': {
+                            'width': {
+                                'magnitude': 400,  # Default width
+                                'unit': 'PT'
+                            }
+                        }
+                    }
+                })
+                current_index += 1  # Image占1个字符
+                images_count += 1
+
+                # Add newline after image
+                requests.append({
+                    'insertText': {
+                        'location': {'index': current_index},
+                        'text': '\n\n'
+                    }
+                })
+                current_index += 2
+
+            elif elem_type == 'list':
+                items = elem['items']
+                ordered = elem['ordered']
+
+                list_text = ''
+                for i, item in enumerate(items, 1):
+                    prefix = f"{i}. " if ordered else "• "
+                    list_text += f"{prefix}{item}\n"
+                list_text += '\n'
+
+                requests.append({
+                    'insertText': {
+                        'location': {'index': current_index},
+                        'text': list_text
+                    }
+                })
+                current_index += len(list_text)
+
+            elif elem_type == 'divider':
+                divider_text = '\n' + '─' * 60 + '\n\n'
+                requests.append({
+                    'insertText': {
+                        'location': {'index': current_index},
+                        'text': divider_text
+                    }
+                })
+                current_index += len(divider_text)
+
+        # Execute batch update
+        logger.info(f"[insert_markdown_content] Executing batch update with {len(requests)} requests")
+
+        result = await asyncio.to_thread(
+            service.documents().batchUpdate(
+                documentId=document_id,
+                body={'requests': requests}
+            ).execute
+        )
+
+        link = f"https://docs.google.com/document/d/{document_id}/edit"
+        msg = f"Successfully inserted Markdown content into document. {len(elements)} elements inserted ({images_count} images)."
+
+        logger.info(f"[insert_markdown_content] {msg}")
+
+        return InsertMarkdownResponse(
+            success=True,
+            document_id=document_id,
+            elements_inserted=len(elements),
+            images_inserted=images_count,
+            start_index=index,
+            end_index=current_index,
+            web_view_link=link,
+            message=msg
+        )
+
+    except Exception as e:
+        error_msg = f"Failed to insert Markdown content: {str(e)}"
+        logger.error(f"[insert_markdown_content] {error_msg}", exc_info=True)
+        raise Exception(error_msg)
 
 
 # Create comment management tools for documents
