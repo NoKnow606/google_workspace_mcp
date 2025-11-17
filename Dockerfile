@@ -25,7 +25,7 @@ RUN uv pip install --system --no-cache \
     sse-starlette>=2.3.3 \
     uvicorn>=0.34.2 \
     pyjwt>=2.10.1 \
-    markdown>=3.10 \
+    markdown>=3.10
 
 # Copy application code
 COPY . .
