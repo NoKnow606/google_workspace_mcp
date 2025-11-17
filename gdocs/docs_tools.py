@@ -700,113 +700,8 @@ async def create_doc(
         elements = parse_markdown_to_elements(content)
         logger.info(f"[create_doc] Parsed {len(elements)} elements from Markdown")
 
-        # Build requests
-        requests = []
-        current_index = 1  # Start at index 1 (after title)
-        images_count = 0
-
-        for elem in elements:
-            elem_type = elem.get('type')
-
-            if elem_type == 'heading':
-                level = elem['level']
-                text = elem['text']
-
-                # Format heading based on level
-                if level == 1:
-                    separator = '=' * 60
-                    formatted_text = f"\n{separator}\n{text}\n{separator}\n\n"
-                elif level == 2:
-                    separator = '-' * 50
-                    formatted_text = f"\n{separator}\n{text}\n{separator}\n\n"
-                else:  # level 3
-                    formatted_text = f"\n### {text}\n\n"
-
-                requests.append({
-                    'insertText': {
-                        'location': {'index': current_index},
-                        'text': formatted_text
-                    }
-                })
-                current_index += len(formatted_text)
-
-            elif elem_type == 'paragraph':
-                text = elem['text']
-                paragraph_text = text + '\n\n'
-                requests.append({
-                    'insertText': {
-                        'location': {'index': current_index},
-                        'text': paragraph_text
-                    }
-                })
-                current_index += len(paragraph_text)
-
-            elif elem_type == 'image':
-                url = elem['url']
-                title_text = elem.get('title', elem.get('alt', 'Image'))
-
-                # Insert image caption
-                caption_text = f"[图片: {title_text}]\n"
-                requests.append({
-                    'insertText': {
-                        'location': {'index': current_index},
-                        'text': caption_text
-                    }
-                })
-                current_index += len(caption_text)
-
-                # Insert image
-                requests.append({
-                    'insertInlineImage': {
-                        'location': {'index': current_index},
-                        'uri': url,
-                        'objectSize': {
-                            'width': {
-                                'magnitude': 400,  # Default width
-                                'unit': 'PT'
-                            }
-                        }
-                    }
-                })
-                current_index += 1  # Image占1个字符
-                images_count += 1
-
-                # Add newline after image
-                requests.append({
-                    'insertText': {
-                        'location': {'index': current_index},
-                        'text': '\n\n'
-                    }
-                })
-                current_index += 2
-
-            elif elem_type == 'list':
-                items = elem['items']
-                ordered = elem['ordered']
-
-                list_text = ''
-                for i, item in enumerate(items, 1):
-                    prefix = f"{i}. " if ordered else "• "
-                    list_text += f"{prefix}{item}\n"
-                list_text += '\n'
-
-                requests.append({
-                    'insertText': {
-                        'location': {'index': current_index},
-                        'text': list_text
-                    }
-                })
-                current_index += len(list_text)
-
-            elif elem_type == 'divider':
-                divider_text = '\n' + '─' * 60 + '\n\n'
-                requests.append({
-                    'insertText': {
-                        'location': {'index': current_index},
-                        'text': divider_text
-                    }
-                })
-                current_index += len(divider_text)
+        # Build requests with styling
+        requests, current_index, images_count = build_requests_from_elements(elements, start_index=1)
 
         # Execute batch update if there are requests
         if requests:
@@ -832,13 +727,70 @@ async def create_doc(
     )
 
 
+def parse_inline_markdown(text: str) -> List[Dict]:
+    """
+    Parse inline Markdown formatting (bold, italic, links).
+
+    Returns a list of text segments with their formatting.
+    Each segment has: {'text': str, 'bold': bool, 'italic': bool, 'link': str|None}
+    """
+    import re
+
+    segments = []
+    remaining = text
+
+    # Pattern to match bold, italic, and links
+    # Order matters: try to match longer patterns first
+    pattern = r'(\*\*\*(.+?)\*\*\*|___(.+?)___|__(.+?)__|_(.+?)_|\*\*(.+?)\*\*|\*(.+?)\*|\[([^\]]+)\]\(([^\)]+)\))'
+
+    last_end = 0
+    for match in re.finditer(pattern, remaining):
+        # Add plain text before this match
+        if match.start() > last_end:
+            plain = remaining[last_end:match.start()]
+            if plain:
+                segments.append({'text': plain, 'bold': False, 'italic': False, 'link': None})
+
+        # Determine the type of formatting
+        full_match = match.group(0)
+
+        # Bold + Italic (*** or ___)
+        if match.group(2):  # ***text***
+            segments.append({'text': match.group(2), 'bold': True, 'italic': True, 'link': None})
+        elif match.group(3):  # ___text___
+            segments.append({'text': match.group(3), 'bold': True, 'italic': True, 'link': None})
+        # Bold (** or __)
+        elif match.group(4):  # __text__
+            segments.append({'text': match.group(4), 'bold': True, 'italic': False, 'link': None})
+        elif match.group(6):  # **text**
+            segments.append({'text': match.group(6), 'bold': True, 'italic': False, 'link': None})
+        # Italic (* or _)
+        elif match.group(5):  # _text_
+            segments.append({'text': match.group(5), 'bold': False, 'italic': True, 'link': None})
+        elif match.group(7):  # *text*
+            segments.append({'text': match.group(7), 'bold': False, 'italic': True, 'link': None})
+        # Link [text](url)
+        elif match.group(8) and match.group(9):
+            segments.append({'text': match.group(8), 'bold': False, 'italic': False, 'link': match.group(9)})
+
+        last_end = match.end()
+
+    # Add remaining plain text
+    if last_end < len(remaining):
+        plain = remaining[last_end:]
+        if plain:
+            segments.append({'text': plain, 'bold': False, 'italic': False, 'link': None})
+
+    return segments if segments else [{'text': text, 'bold': False, 'italic': False, 'link': None}]
+
+
 def parse_markdown_to_elements(markdown_text: str) -> List[Dict]:
     """
     Parse Markdown text into document elements.
 
     Supports:
     - Headings (# H1, ## H2, ### H3)
-    - Paragraphs
+    - Paragraphs with inline formatting
     - Lists (- or * for unordered, 1. for ordered)
     - Images (![alt](url))
     - Bold (**text** or __text__)
@@ -871,10 +823,12 @@ def parse_markdown_to_elements(markdown_text: str) -> List[Dict]:
         if heading_match:
             level = len(heading_match.group(1))
             text = heading_match.group(2)
+            # Parse inline formatting in heading text
+            segments = parse_inline_markdown(text)
             elements.append({
                 'type': 'heading',
                 'level': level,
-                'text': text
+                'segments': segments
             })
             i += 1
             continue
@@ -899,7 +853,9 @@ def parse_markdown_to_elements(markdown_text: str) -> List[Dict]:
             list_items = []
             while i < len(lines) and re.match(r'^[\-\*]\s+', lines[i].strip()):
                 item_text = re.sub(r'^[\-\*]\s+', '', lines[i].strip())
-                list_items.append(item_text)
+                # Parse inline formatting in list item
+                segments = parse_inline_markdown(item_text)
+                list_items.append(segments)
                 i += 1
             elements.append({
                 'type': 'list',
@@ -913,7 +869,9 @@ def parse_markdown_to_elements(markdown_text: str) -> List[Dict]:
             list_items = []
             while i < len(lines) and re.match(r'^\d+\.\s+', lines[i].strip()):
                 item_text = re.sub(r'^\d+\.\s+', '', lines[i].strip())
-                list_items.append(item_text)
+                # Parse inline formatting in list item
+                segments = parse_inline_markdown(item_text)
+                list_items.append(segments)
                 i += 1
             elements.append({
                 'type': 'list',
@@ -949,12 +907,250 @@ def parse_markdown_to_elements(markdown_text: str) -> List[Dict]:
 
         if paragraph_lines:
             paragraph_text = ' '.join(paragraph_lines)
+            # Parse inline formatting in paragraph
+            segments = parse_inline_markdown(paragraph_text)
             elements.append({
                 'type': 'paragraph',
-                'text': paragraph_text
+                'segments': segments
             })
 
     return elements
+
+
+def build_requests_from_elements(elements: List[Dict], start_index: int = 1) -> tuple:
+    """
+    Build Google Docs API requests from parsed Markdown elements.
+
+    Returns:
+        tuple: (requests, current_index, images_count)
+    """
+    requests = []
+    current_index = start_index
+    images_count = 0
+
+    for elem in elements:
+        elem_type = elem.get('type')
+
+        if elem_type == 'heading':
+            level = elem['level']
+            segments = elem['segments']
+
+            # Insert text
+            text_content = ''.join(seg['text'] for seg in segments) + '\n'
+            text_start = current_index
+
+            requests.append({
+                'insertText': {
+                    'location': {'index': current_index},
+                    'text': text_content
+                }
+            })
+            current_index += len(text_content)
+
+            # Apply heading style to the paragraph
+            heading_style = f'HEADING_{level}'
+            requests.append({
+                'updateParagraphStyle': {
+                    'range': {
+                        'startIndex': text_start,
+                        'endIndex': current_index - 1
+                    },
+                    'paragraphStyle': {
+                        'namedStyleType': heading_style
+                    },
+                    'fields': 'namedStyleType'
+                }
+            })
+
+            # Apply inline formatting (bold, italic, links)
+            segment_index = text_start
+            for seg in segments:
+                seg_len = len(seg['text'])
+                if seg_len > 0 and (seg['bold'] or seg['italic'] or seg['link']):
+                    text_style = {}
+                    fields = []
+
+                    if seg['bold']:
+                        text_style['bold'] = True
+                        fields.append('bold')
+                    if seg['italic']:
+                        text_style['italic'] = True
+                        fields.append('italic')
+                    if seg['link']:
+                        text_style['link'] = {'url': seg['link']}
+                        fields.append('link')
+
+                    if text_style:
+                        requests.append({
+                            'updateTextStyle': {
+                                'range': {
+                                    'startIndex': segment_index,
+                                    'endIndex': segment_index + seg_len
+                                },
+                                'textStyle': text_style,
+                                'fields': ','.join(fields)
+                            }
+                        })
+                segment_index += seg_len
+
+        elif elem_type == 'paragraph':
+            segments = elem['segments']
+
+            # Insert text
+            text_content = ''.join(seg['text'] for seg in segments) + '\n'
+            text_start = current_index
+
+            requests.append({
+                'insertText': {
+                    'location': {'index': current_index},
+                    'text': text_content
+                }
+            })
+            current_index += len(text_content)
+
+            # Apply inline formatting (bold, italic, links)
+            segment_index = text_start
+            for seg in segments:
+                seg_len = len(seg['text'])
+                if seg_len > 0 and (seg['bold'] or seg['italic'] or seg['link']):
+                    text_style = {}
+                    fields = []
+
+                    if seg['bold']:
+                        text_style['bold'] = True
+                        fields.append('bold')
+                    if seg['italic']:
+                        text_style['italic'] = True
+                        fields.append('italic')
+                    if seg['link']:
+                        text_style['link'] = {'url': seg['link']}
+                        fields.append('link')
+
+                    if text_style:
+                        requests.append({
+                            'updateTextStyle': {
+                                'range': {
+                                    'startIndex': segment_index,
+                                    'endIndex': segment_index + seg_len
+                                },
+                                'textStyle': text_style,
+                                'fields': ','.join(fields)
+                            }
+                        })
+                segment_index += seg_len
+
+        elif elem_type == 'image':
+            url = elem['url']
+            title = elem.get('title', elem.get('alt', 'Image'))
+
+            # Insert image inline without caption
+            requests.append({
+                'insertInlineImage': {
+                    'location': {'index': current_index},
+                    'uri': url,
+                    'objectSize': {
+                        'width': {
+                            'magnitude': 400,
+                            'unit': 'PT'
+                        }
+                    }
+                }
+            })
+            current_index += 1
+            images_count += 1
+
+            # Add newline after image
+            requests.append({
+                'insertText': {
+                    'location': {'index': current_index},
+                    'text': '\n'
+                }
+            })
+            current_index += 1
+
+        elif elem_type == 'list':
+            items = elem['items']
+            ordered = elem['ordered']
+
+            list_start = current_index
+            list_ranges = []
+
+            # Insert all list items
+            for item_segments in items:
+                item_start = current_index
+                item_text = ''.join(seg['text'] for seg in item_segments) + '\n'
+
+                requests.append({
+                    'insertText': {
+                        'location': {'index': current_index},
+                        'text': item_text
+                    }
+                })
+                current_index += len(item_text)
+
+                # Track the range for this list item
+                list_ranges.append({
+                    'startIndex': item_start,
+                    'endIndex': current_index - 1,
+                    'segments': item_segments,
+                    'text_start': item_start
+                })
+
+            # Apply bullet/numbering to list items
+            for list_range in list_ranges:
+                requests.append({
+                    'createParagraphBullets': {
+                        'range': {
+                            'startIndex': list_range['startIndex'],
+                            'endIndex': list_range['endIndex']
+                        },
+                        'bulletPreset': 'NUMBERED_DECIMAL_ALPHA_ROMAN' if ordered else 'BULLET_DISC_CIRCLE_SQUARE'
+                    }
+                })
+
+                # Apply inline formatting to list items
+                segment_index = list_range['text_start']
+                for seg in list_range['segments']:
+                    seg_len = len(seg['text'])
+                    if seg_len > 0 and (seg['bold'] or seg['italic'] or seg['link']):
+                        text_style = {}
+                        fields = []
+
+                        if seg['bold']:
+                            text_style['bold'] = True
+                            fields.append('bold')
+                        if seg['italic']:
+                            text_style['italic'] = True
+                            fields.append('italic')
+                        if seg['link']:
+                            text_style['link'] = {'url': seg['link']}
+                            fields.append('link')
+
+                        if text_style:
+                            requests.append({
+                                'updateTextStyle': {
+                                    'range': {
+                                        'startIndex': segment_index,
+                                        'endIndex': segment_index + seg_len
+                                    },
+                                    'textStyle': text_style,
+                                    'fields': ','.join(fields)
+                                }
+                            })
+                    segment_index += seg_len
+
+        elif elem_type == 'divider':
+            # Insert horizontal rule as text
+            divider_text = '\n' + '─' * 60 + '\n'
+            requests.append({
+                'insertText': {
+                    'location': {'index': current_index},
+                    'text': divider_text
+                }
+            })
+            current_index += len(divider_text)
+
+    return requests, current_index, images_count
 
 
 @server.tool
@@ -1003,113 +1199,8 @@ async def append_content(
         elements = parse_markdown_to_elements(content)
         logger.info(f"[insert_markdown_content] Parsed {len(elements)} elements from Markdown")
 
-        # Build requests
-        requests = []
-        current_index = index
-        images_count = 0
-
-        for elem in elements:
-            elem_type = elem.get('type')
-
-            if elem_type == 'heading':
-                level = elem['level']
-                text = elem['text']
-
-                # Format heading based on level
-                if level == 1:
-                    separator = '=' * 60
-                    formatted_text = f"\n{separator}\n{text}\n{separator}\n\n"
-                elif level == 2:
-                    separator = '-' * 50
-                    formatted_text = f"\n{separator}\n{text}\n{separator}\n\n"
-                else:  # level 3
-                    formatted_text = f"\n### {text}\n\n"
-
-                requests.append({
-                    'insertText': {
-                        'location': {'index': current_index},
-                        'text': formatted_text
-                    }
-                })
-                current_index += len(formatted_text)
-
-            elif elem_type == 'paragraph':
-                text = elem['text']
-                paragraph_text = text + '\n\n'
-                requests.append({
-                    'insertText': {
-                        'location': {'index': current_index},
-                        'text': paragraph_text
-                    }
-                })
-                current_index += len(paragraph_text)
-
-            elif elem_type == 'image':
-                url = elem['url']
-                title = elem.get('title', elem.get('alt', 'Image'))
-
-                # Insert image caption
-                caption_text = f"[图片: {title}]\n"
-                requests.append({
-                    'insertText': {
-                        'location': {'index': current_index},
-                        'text': caption_text
-                    }
-                })
-                current_index += len(caption_text)
-
-                # Insert image
-                requests.append({
-                    'insertInlineImage': {
-                        'location': {'index': current_index},
-                        'uri': url,
-                        'objectSize': {
-                            'width': {
-                                'magnitude': 400,  # Default width
-                                'unit': 'PT'
-                            }
-                        }
-                    }
-                })
-                current_index += 1  # Image占1个字符
-                images_count += 1
-
-                # Add newline after image
-                requests.append({
-                    'insertText': {
-                        'location': {'index': current_index},
-                        'text': '\n\n'
-                    }
-                })
-                current_index += 2
-
-            elif elem_type == 'list':
-                items = elem['items']
-                ordered = elem['ordered']
-
-                list_text = ''
-                for i, item in enumerate(items, 1):
-                    prefix = f"{i}. " if ordered else "• "
-                    list_text += f"{prefix}{item}\n"
-                list_text += '\n'
-
-                requests.append({
-                    'insertText': {
-                        'location': {'index': current_index},
-                        'text': list_text
-                    }
-                })
-                current_index += len(list_text)
-
-            elif elem_type == 'divider':
-                divider_text = '\n' + '─' * 60 + '\n\n'
-                requests.append({
-                    'insertText': {
-                        'location': {'index': current_index},
-                        'text': divider_text
-                    }
-                })
-                current_index += len(divider_text)
+        # Build requests with styling
+        requests, current_index, images_count = build_requests_from_elements(elements, start_index=index)
 
         # Execute batch update
         logger.info(f"[insert_markdown_content] Executing batch update with {len(requests)} requests")
